@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shiori — Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a class="brand-wrap" href="library.html">
+      <div class="brand-icon">💾</div>
+      <span class="brand-text">Shiori</span>
+    </a>
+    <span class="brand-sep">/</span>
+    <span class="brand-page">Settings</span>
+  </div>
+</header>
+
+<div class="content">
+
+  <!-- API Key -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">API Key</div>
+    </div>
+    <div class="section-body">
+      <div class="field">
+        <div class="field-label">nhentai API Key</div>
+        <div class="field-desc">Your API key is stored locally in this browser only and never sent anywhere except nhentai requests.</div>
+        <div class="input-wrap">
+          <input class="field-input has-toggle" type="password" id="apiKeyInput" placeholder="Paste your API key here…" autocomplete="off" spellcheck="false">
+          <button class="reveal-btn" id="revealBtn">Show</button>
+        </div>
+        <div id="keyBadge" class="key-status-badge unset" style="display:none"></div>
+      </div>
+      <div class="actions-row">
+        <button class="btn-clear-key" id="clearKeyBtn">Remove Key</button>
+        <button class="btn-save" id="saveKeyBtn">Save Key</button>
+      </div>
+      <div class="status-msg hidden" id="keyStatus"></div>
+    </div>
+  </div>
+
+  <!-- Behaviour -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Behaviour</div>
+    </div>
+    <div class="section-body">
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">Cache Enabled</div>
+          <div class="toggle-desc">Automatically cache images while browsing.</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="cacheToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="actions-row">
+        <div class="status-msg hidden" id="behaviorStatus"></div>
+        <button class="btn-save" id="saveBehaviorBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Danger Zone -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title" style="color:var(--danger)">Danger Zone</div>
+    </div>
+    <div class="section-body">
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">Clear All Cache</div>
+          <div class="toggle-desc">Permanently deletes every cached gallery and image. Cannot be undone.</div>
+        </div>
+        <button class="btn-clear-all" id="clearAllBtn">✕ Clear All</button>
+      </div>
+      <div class="status-msg hidden" id="clearAllStatus"></div>
+    </div>
+  </div>
+
+  <!-- Changelog -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Changelog</div>
+    </div>
+    <div class="section-body" style="gap:16px">
+
+      <div class="cl-entry">
+        <div class="cl-version">v.1 <span class="cl-date">2026-05-14</span></div>
+        <ul class="cl-list">
+          <li>Initial release</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="options.js"></script>
+</body>
+</html>

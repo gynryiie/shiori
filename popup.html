@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shiori</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+    :root {
+      --bg: #0d0d0f; --surface: #16161a; --border: #2a2a30;
+      --accent: #ff6b6b; --accent2: #ffd166; --text: #e8e8f0;
+      --muted: #6b6b80; --success: #06d6a0; --danger: #ff4040;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 320px; background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+    .header { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface); }
+    .logo { display: flex; align-items: center; gap: 8px; }
+    .logo-icon { width: 24px; height: 24px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .logo-text { font-weight: 700; font-size: 13px; letter-spacing: -0.3px; }
+    .logo-sub { font-size: 9px; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; }
+    .toggle-wrap { display: flex; align-items: center; gap: 8px; }
+    .toggle-label { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+    .settings-btn { background: none; border: 1px solid var(--border); color: var(--muted); font-size: 13px; width: 26px; height: 26px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; padding: 0; }
+    .settings-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .toggle { position: relative; width: 36px; height: 20px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: var(--border); border-radius: 20px; cursor: pointer; transition: 0.2s; }
+    .slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: var(--muted); border-radius: 50%; transition: 0.2s; }
+    input:checked + .slider { background: var(--accent); }
+    input:checked + .slider::before { transform: translateX(16px); background: white; }
+
+    .stats { padding: 14px 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 8px; text-align: center; }
+    .stat-value { font-size: 18px; font-weight: 700; color: var(--accent); line-height: 1; }
+    .stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; margin-top: 4px; }
+
+    .section-row { padding: 0 16px 8px; display: flex; align-items: center; justify-content: space-between; }
+    .section-title { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .view-all-btn { font-size: 9px; color: var(--accent); background: none; border: none; cursor: pointer; font-family: inherit; text-transform: uppercase; letter-spacing: 0.5px; padding: 0; }
+    .view-all-btn:hover { text-decoration: underline; }
+
+    .gallery-list { margin: 0 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+
+    .gallery-item { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid var(--border); background: var(--surface); transition: background 0.15s; overflow: hidden; }
+    .gallery-item:last-child { border-bottom: none; }
+    .gallery-item:hover { background: #1e1e24; }
+
+    .gallery-link { display: flex; align-items: flex-start; gap: 10px; flex: 1; padding: 10px 10px; text-decoration: none; color: inherit; min-width: 0; overflow: hidden; }
+    .gallery-link:hover .gallery-id { color: var(--accent); }
+
+    .thumb-wrap { width: 44px; aspect-ratio: 2/3; flex-shrink: 0; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); background: var(--bg); }
+    .thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+
+    .gallery-info { min-width: 0; flex: 1; overflow: hidden; }
+    .gallery-id { color: var(--accent2); font-weight: 700; font-size: 11px; }
+    .gallery-title { font-size: 10px; color: var(--text); opacity: 0.85; margin-top: 3px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .gallery-tags { display: flex; gap: 3px; margin-top: 4px; overflow: hidden; flex-wrap: nowrap; max-width: 100%; }
+    .gallery-tag { font-size: 8px; padding: 1px 5px; line-height: 1.4; background: #1e1e28; border: 1px solid var(--border); border-radius: 3px; color: var(--muted); white-space: nowrap; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; max-width: 90px; }
+    .gallery-tag.artist { color: var(--accent2); border-color: #3a3a20; }
+    .gallery-meta { font-size: 9px; color: var(--muted); margin-top: 4px; }
+
+    .delete-btn { background: none; border: 1px solid var(--border); color: var(--danger); font-family: inherit; font-size: 10px; padding: 3px 8px; margin: 0 8px; border-radius: 4px; cursor: pointer; transition: all 0.15s; flex-shrink: 0; align-self: center; }
+    .delete-btn:hover { background: var(--danger); color: white; border-color: var(--danger); }
+
+    .more-hint { padding: 7px 12px; font-size: 10px; color: var(--accent); text-align: center; background: var(--surface); border-top: 1px solid var(--border); }
+    .more-hint:hover { text-decoration: underline; }
+
+    .empty-state { padding: 24px; text-align: center; color: var(--muted); font-size: 11px; background: var(--surface); }
+
+    .actions { padding: 12px 16px 14px; display: flex; gap: 8px; margin-top: 8px; }
+    .btn { flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; text-align: center; }
+    .btn-ghost { background: var(--surface); color: var(--muted); }
+    .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
+
+    .status-bar { padding: 6px 16px; background: var(--surface); border-top: 1px solid var(--border); font-size: 10px; color: var(--success); text-align: center; min-height: 28px; display: flex; align-items: center; justify-content: center; }
+
+    .location-panel { display: none; margin: 0 16px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; flex-direction: column; gap: 6px; }
+    .location-panel.show { display: flex; }
+    .location-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .location-note  { font-size: 9px; color: var(--muted); line-height: 1.5; }
+    .location-path  { font-size: 9px; color: var(--text); word-break: break-all; line-height: 1.6; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; user-select: all; cursor: text; }
+    .copy-path-btn  { background: none; border: 1px solid var(--border); color: var(--muted); font-family: inherit; font-size: 9px; padding: 3px 8px; border-radius: 4px; cursor: pointer; transition: all 0.15s; align-self: flex-end; text-transform: uppercase; letter-spacing: 0.5px; }
+    .copy-path-btn:hover { border-color: var(--accent); color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo" id="logoBtn" style="cursor:pointer;">
+      <div class="logo-icon">💾</div>
+      <div>
+        <div class="logo-text">Shiori</div>
+      </div>
+    </div>
+    <div class="toggle-wrap">
+      <span class="toggle-label">Active</span>
+      <label class="toggle">
+        <input type="checkbox" id="enableToggle" checked>
+        <span class="slider"></span>
+      </label>
+      <button class="settings-btn" id="refreshBtn" title="Refresh"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+      <button class="settings-btn" id="uploadCbzBtn" title="Import CBZ"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg></button>
+      <button class="settings-btn" id="settingsBtn" title="Settings"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card"><div class="stat-value" id="totalImages">—</div><div class="stat-label">Images</div></div>
+    <div class="stat-card"><div class="stat-value" id="totalGalleries">—</div><div class="stat-label">Galleries</div></div>
+    <div class="stat-card"><div class="stat-value" id="totalSize">—</div><div class="stat-label">Stored</div></div>
+  </div>
+
+  <div class="section-row">
+    <span class="section-title">Recent Galleries</span>
+    <button class="view-all-btn" id="viewAllBtn">View All →</button>
+  </div>
+
+  <div class="gallery-list" id="galleryList">
+    <div class="empty-state">Loading cache…</div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-ghost" id="locationBtn"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> Location</button>
+  </div>
+
+  <div class="location-panel" id="locationPanel">
+    <div class="location-label">IndexedDB Storage Path</div>
+    <div class="location-note">Paste into Explorer's address bar to open the folder. The data is stored as a LevelDB database, not individual image files.</div>
+    <div class="location-path" id="locationPath"></div>
+    <button class="copy-path-btn" id="copyPathBtn">Copy Path</button>
+  </div>
+
+  <div class="status-bar" id="statusBar">Ready</div>
+  <script src="popup.js"></script>
+</body>
+</html>
