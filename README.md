@@ -69,11 +69,15 @@ Click **Read** on any card. The reader loads all cached pages directly from Inde
 |---|---|
 | `←` `↑` `W` `A` | Previous page |
 | `→` `↓` `S` `D` `Space` | Next page |
+| `Shift+←` `Shift+↑` `Shift+W` `Shift+A` | First page / scroll to top |
+| `Shift+→` `Shift+↓` `Shift+S` `Shift+D` | Last page / scroll to bottom |
+| `Home` / `End` | First / last page |
+| `1` / `2` / `3` | Single page / double page / scroll strip |
 | Click left/right half of image | Previous / next page |
 | Layout toggle (toolbar) | Switch between scroll strip and page view |
 | Single/double toggle (toolbar) | Toggle double-page spread |
 | `T` | Toggle thumbnail strip |
-| `?` | Keyboard shortcuts reference |
+| `?` `Esc` | Keyboard shortcuts reference |
 | Thumbnail strip | Jump to any page |
 
 ### Importing CBZ / ZIP files

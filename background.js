@@ -1,9 +1,10 @@
 // background.js — Service worker
 
 const DB_NAME = 'nhentai-image-cache';
-const DB_VERSION = 4;
+const DB_VERSION = 6;
 const STORE = 'images';
 const META_STORE = 'metadata';
+const GALLERY_STORE = 'galleries';
 const EXT_MAP = { j: 'jpg', p: 'png', w: 'webp', g: 'gif' };
 
 // ── Site registry ──
@@ -51,16 +52,12 @@ function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
-      const oldV = e.oldVersion;
-      if (oldV < 3) {
-        if (db.objectStoreNames.contains(STORE)) db.deleteObjectStore(STORE);
-        const s = db.createObjectStore(STORE, { keyPath: 'url' });
-        s.createIndex('mediaId', 'mediaId', { unique: false });
-        s.createIndex('galleryId', 'galleryId', { unique: false });
-      }
-      if (!db.objectStoreNames.contains(META_STORE)) {
-        db.createObjectStore(META_STORE, { keyPath: 'galleryId' });
-      }
+      for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name);
+      const s = db.createObjectStore(STORE, { keyPath: 'url' });
+      s.createIndex('mediaId', 'mediaId', { unique: false });
+      s.createIndex('galleryId', 'galleryId', { unique: false });
+      db.createObjectStore(META_STORE, { keyPath: 'galleryId' });
+      db.createObjectStore(GALLERY_STORE, { keyPath: 'galleryId' });
     };
     req.onsuccess = () => {
       _db = req.result;
@@ -85,24 +82,32 @@ async function dbGet(url) {
 
 async function dbPut(url, dataUrl, mediaId, galleryId) {
   const db = await openDB();
-  // Always store galleryId as a string so index lookups are type-consistent.
   const gid = String(galleryId || mediaId);
-  const canonUrl = url.startsWith('local://')
-    ? url
-    : canonicalNhentaiUrl(url);
+  const canonUrl = url.startsWith('local://') ? url : canonicalNhentaiUrl(url);
+  const size = Math.round(dataUrl.length * 0.75);
+  const cachedAt = Date.now();
+  const pm = canonUrl.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
+  const pageNum = pm ? parseInt(pm[1]) : 9999;
 
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    const req = tx.objectStore(STORE).put({
-      url: canonUrl,
-      dataUrl,
-      mediaId: String(mediaId),
-      galleryId: gid,
-      cachedAt: Date.now(),
-      size: Math.round(dataUrl.length * 0.75)
-    });
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
+    const tx = db.transaction([STORE, GALLERY_STORE], 'readwrite');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+
+    tx.objectStore(STORE).put({ url: canonUrl, dataUrl, mediaId: String(mediaId), galleryId: gid, cachedAt, size });
+
+    const galReq = tx.objectStore(GALLERY_STORE).get(gid);
+    galReq.onsuccess = () => {
+      const cur = galReq.result;
+      let entry;
+      if (cur) {
+        entry = { ...cur, count: cur.count + 1, size: cur.size + size, latestAt: Math.max(cur.latestAt || 0, cachedAt) };
+        if (pageNum < (cur.coverPage ?? 9999)) { entry.cover = dataUrl; entry.coverPage = pageNum; }
+      } else {
+        entry = { galleryId: gid, count: 1, size, latestAt: cachedAt, cover: pageNum < 9999 ? dataUrl : null, coverPage: pageNum };
+      }
+      tx.objectStore(GALLERY_STORE).put(entry);
+    };
   });
 }
 
@@ -148,6 +153,72 @@ async function metaDelete(galleryId) {
   });
 }
 
+// ── Gallery stats store helpers ──
+
+async function galleryGet(galleryId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(GALLERY_STORE, 'readonly');
+    const req = tx.objectStore(GALLERY_STORE).get(String(galleryId));
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function galleryPut(entry) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(GALLERY_STORE, 'readwrite');
+    const req = tx.objectStore(GALLERY_STORE).put(entry);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function galleryDelete(galleryId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(GALLERY_STORE, 'readwrite');
+    const req = tx.objectStore(GALLERY_STORE).delete(String(galleryId));
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function galleryGetAll() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(GALLERY_STORE, 'readonly');
+    const req = tx.objectStore(GALLERY_STORE).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Rebuilds the gallery entry by scanning actual image records.
+// Used after dedup when the in-memory count/size/cover may be stale.
+async function rebuildGalleryEntry(galleryId) {
+  const gid = String(galleryId);
+  const db = await openDB();
+  const records = await new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).index('galleryId').getAll(IDBKeyRange.only(gid));
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+  if (records.length === 0) { await galleryDelete(gid); return; }
+  let count = 0, size = 0, latestAt = 0, cover = null, coverPage = 9999;
+  for (const r of records) {
+    count++;
+    size += r.size || 0;
+    latestAt = Math.max(latestAt, r.cachedAt || 0);
+    const pm = r.url.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
+    const pn = pm ? parseInt(pm[1]) : 9999;
+    if (pn < coverPage) { coverPage = pn; cover = r.dataUrl; }
+  }
+  await galleryPut({ galleryId: gid, count, size, latestAt, cover, coverPage });
+}
+
 // ── Metadata fetch from nhentai API ──
 
 async function fetchAndStoreMetadata(galleryId, apiKey = null) {
@@ -189,41 +260,36 @@ async function fetchAndStoreMetadata(galleryId, apiKey = null) {
 
 // Returns the first record for this gallery whose URL ends in /{pageNum}.{ext},
 // regardless of URL scheme (handles local:// vs CDN mismatch after CBZ import).
+// Returns the full record for a specific page number within a gallery.
+// Used only by GET_IMAGE for cross-scheme URL resolution (local:// vs CDN).
 async function dbGetByGalleryPage(galleryId, pageNum) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).index('galleryId').getAll(IDBKeyRange.only(String(galleryId)));
-    req.onsuccess = () => {
-      const records = req.result || [];
-      const record = records.find(r => {
-        const m = r.url.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
-        return m && parseInt(m[1]) === pageNum;
-      });
-      resolve(record || null);
+    const tx  = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).index('galleryId').openCursor(IDBKeyRange.only(String(galleryId)));
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) { resolve(null); return; }
+      const m = cursor.value.url.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
+      if (m && parseInt(m[1]) === pageNum) { resolve(cursor.value); return; }
+      cursor.continue();
     };
     req.onerror = () => reject(req.error);
   });
 }
 
+// Checks page existence using key-only cursor — no dataUrls loaded.
 async function pageExistsForGallery(galleryId, pageNum) {
-  return (await dbGetByGalleryPage(galleryId, pageNum)) !== null;
-}
-
-async function dbGetCoverPage(galleryId) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).index('galleryId').getAll(IDBKeyRange.only(String(galleryId)));
-    req.onsuccess = () => {
-      const records = req.result || [];
-      let best = null, bestPage = Infinity;
-      for (const r of records) {
-        const m = r.url.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
-        const pn = m ? parseInt(m[1]) : Infinity;
-        if (pn < bestPage) { bestPage = pn; best = r; }
-      }
-      resolve(best);
+    const tx  = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).index('galleryId').openKeyCursor(IDBKeyRange.only(String(galleryId)));
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) { resolve(false); return; }
+      const m = cursor.primaryKey.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
+      if (m && parseInt(m[1]) === pageNum) { resolve(true); return; }
+      cursor.continue();
     };
     req.onerror = () => reject(req.error);
   });
@@ -232,8 +298,11 @@ async function dbGetCoverPage(galleryId) {
 async function fetchAndCache(url, mediaId, galleryId, tabId) {
   const canonUrl = canonicalNhentaiUrl(url);
 
-  // Skip if this page number is already stored for this gallery under any URL
-  // scheme (e.g. a prior local CBZ import used local:// URLs for the same pages).
+  // Fast path: exact URL already in cache.
+  if (await dbGet(canonUrl)) return null;
+
+  // Slow path: check by page number to catch cross-scheme matches
+  // (e.g. gallery imported via CBZ uses local:// URLs; browsing via CDN sends different URL).
   if (galleryId) {
     const pm = canonUrl.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
     if (pm && await pageExistsForGallery(String(galleryId), parseInt(pm[1]))) {
@@ -361,16 +430,19 @@ async function storeCbzEntries(imageEntries, mediaId, galleryId, urlBuilder, sen
   let existingPageNums = new Set();
   if (skipExisting) {
     const db = await openDB();
-    const existing = await new Promise((resolve, reject) => {
-      const tx  = db.transaction('images', 'readonly');
-      const req = tx.objectStore('images').index('galleryId').getAll(IDBKeyRange.only(gid));
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror   = () => reject(req.error);
+    existingPageNums = await new Promise((resolve, reject) => {
+      const pages = new Set();
+      const tx  = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).index('galleryId').openKeyCursor(IDBKeyRange.only(gid));
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (!cursor) { resolve(pages); return; }
+        const m = cursor.primaryKey.match(/\/(\d+)\.(webp|jpe?g|png|gif)$/i);
+        if (m) pages.add(parseInt(m[1]));
+        cursor.continue();
+      };
+      req.onerror = () => reject(req.error);
     });
-    for (const record of existing) {
-      const m = record.url.match(/\/(\d+)\.(webp|jpe?g|png|gif)$/i);
-      if (m) existingPageNums.add(parseInt(m[1]));
-    }
   } else {
     await deleteGalleryImages(gid);
   }
@@ -410,13 +482,14 @@ async function deleteGalleryImages(galleryId) {
   const gid = String(galleryId);
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
+    const tx = db.transaction([STORE, GALLERY_STORE], 'readwrite');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
     const req = tx.objectStore(STORE).index('galleryId').openCursor(IDBKeyRange.only(gid));
     req.onsuccess = (e) => {
       const cursor = e.target.result;
-      if (cursor) { cursor.delete(); cursor.continue(); } else resolve();
+      if (cursor) { cursor.delete(); cursor.continue(); } else { tx.objectStore(GALLERY_STORE).delete(gid); }
     };
-    req.onerror = () => reject(req.error);
   });
 }
 
@@ -440,6 +513,12 @@ async function rekeyGallery(oldGid, newGid) {
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
     });
+  }
+
+  const oldGallery = await galleryGet(oldGid);
+  if (oldGallery) {
+    await galleryDelete(oldGid);
+    await galleryPut({ ...oldGallery, galleryId: newGid });
   }
 
   const oldMeta = await metaGet(oldGid);
@@ -637,14 +716,14 @@ async function ensureMetadataForGallery(galleryId, tabId) {
       chrome.storage.local.set({ libraryVersion: Date.now() });
 
       if (tabId) {
-        const coverRecord = await dbGetCoverPage(gid).catch(() => null);
+        const galEntry = await galleryGet(gid).catch(() => null);
         chrome.tabs.sendMessage(tabId, {
           type: 'METADATA_SAVED',
           galleryId: gid,
           title: meta.titlePretty || meta.titleEnglish || '',
           tags: meta.tags,
           numPages: meta.numPages || 0,
-          cover: coverRecord?.dataUrl || null,
+          cover: galEntry?.cover || null,
         }).catch(() => {});
       }
     }
@@ -839,30 +918,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // ── Stats / gallery helpers ──
 
 async function getStats() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => {
-      const records = req.result;
-      const galleries = {};
-      let totalSize = 0;
-      for (const r of records) {
-        totalSize += r.size || 0;
-        const gid = r.galleryId;
-        if (!galleries[gid]) galleries[gid] = { count: 0, size: 0, latestAt: 0, cover: null, _cp: 9999 };
-        galleries[gid].count++;
-        galleries[gid].size += r.size || 0;
-        if ((r.cachedAt || 0) > galleries[gid].latestAt) galleries[gid].latestAt = r.cachedAt || 0;
-        const pm = r.url.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
-        const pn = pm ? parseInt(pm[1]) : 9999;
-        if (pn < galleries[gid]._cp) { galleries[gid]._cp = pn; galleries[gid].cover = r.dataUrl; }
-      }
-      for (const g of Object.values(galleries)) delete g._cp;
-      resolve({ totalImages: records.length, totalSize, galleries });
-    };
-    req.onerror = () => reject(req.error);
-  });
+  const entries = await galleryGetAll();
+  const galleries = {};
+  let totalImages = 0, totalSize = 0;
+  for (const e of entries) {
+    galleries[e.galleryId] = { count: e.count, size: e.size, latestAt: e.latestAt, cover: e.cover };
+    totalImages += e.count;
+    totalSize += e.size;
+  }
+  return { totalImages, totalSize, galleries };
 }
 
 // Remove CDN-URL duplicates for pages that are already stored under a local://
@@ -872,30 +936,33 @@ async function deduplicateGalleryImages(galleryId) {
   if (_dedupedGalleries.has(gid)) return; // already clean in this SW session
   const db = await openDB();
 
-  const records = await new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).index('galleryId').getAll(IDBKeyRange.only(gid));
-    req.onsuccess = () => resolve(req.result || []);
+  // Collect only URLs via key-only cursor — no dataUrls loaded.
+  const urlsByPage = new Map();
+  await new Promise((resolve, reject) => {
+    const tx  = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).index('galleryId').openKeyCursor(IDBKeyRange.only(gid));
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) { resolve(); return; }
+      const url = cursor.primaryKey;
+      const m   = url.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
+      if (m) {
+        const pn = parseInt(m[1]);
+        if (!urlsByPage.has(pn)) urlsByPage.set(pn, []);
+        urlsByPage.get(pn).push(url);
+      }
+      cursor.continue();
+    };
     req.onerror = () => reject(req.error);
   });
 
-  // Group records by page number
-  const byPage = new Map();
-  for (const rec of records) {
-    const m = rec.url.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
-    if (!m) continue;
-    const pageNum = parseInt(m[1]);
-    if (!byPage.has(pageNum)) byPage.set(pageNum, []);
-    byPage.get(pageNum).push(rec);
-  }
-
   // For any page that has both a local:// record and a CDN record, delete the CDN one
   const urlsToDelete = [];
-  for (const recs of byPage.values()) {
-    if (recs.length <= 1) continue;
-    if (recs.some(r => r.url.startsWith('local://'))) {
-      for (const r of recs) {
-        if (!r.url.startsWith('local://')) urlsToDelete.push(r.url);
+  for (const urls of urlsByPage.values()) {
+    if (urls.length <= 1) continue;
+    if (urls.some(u => u.startsWith('local://'))) {
+      for (const u of urls) {
+        if (!u.startsWith('local://')) urlsToDelete.push(u);
       }
     }
   }
@@ -913,6 +980,7 @@ async function deduplicateGalleryImages(galleryId) {
     tx.onerror = () => reject(tx.error);
   });
 
+  await rebuildGalleryEntry(gid);
   _dedupedGalleries.add(gid);
 }
 
@@ -958,20 +1026,14 @@ async function deleteGallery(galleryId) {
 
 async function clearAll() {
   const db = await openDB();
-  await Promise.all([
+  await Promise.all([STORE, META_STORE, GALLERY_STORE].map(storeName =>
     new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      const req = tx.objectStore(STORE).clear();
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
-    }),
-    new Promise((resolve, reject) => {
-      const tx = db.transaction(META_STORE, 'readwrite');
-      const req = tx.objectStore(META_STORE).clear();
+      const tx = db.transaction(storeName, 'readwrite');
+      const req = tx.objectStore(storeName).clear();
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     })
-  ]);
+  ));
 }
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -1017,25 +1079,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
 async function _fetchGalleryRecords(galleryId) {
   const gid = String(galleryId);
   const db = await openDB();
-
-  let records = await new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
+  return new Promise((resolve, reject) => {
+    const tx  = db.transaction(STORE, 'readonly');
     const req = tx.objectStore(STORE).index('galleryId').getAll(IDBKeyRange.only(gid));
     req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
+    req.onerror   = () => reject(req.error);
   });
-
-  if (records.length === 0) {
-    const all = await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const req = tx.objectStore(STORE).getAll();
-      req.onsuccess = () => resolve(req.result || []);
-      req.onerror = () => reject(req.error);
-    });
-    records = all.filter(r => String(r.galleryId) === gid);
-  }
-
-  return records;
 }
 
 async function getGalleryPages(galleryId) {

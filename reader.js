@@ -32,20 +32,19 @@ let stripObserver = null;
 // Per-page dataUrl cache — avoids re-fetching on navigation or mode switch
 const _dataUrlCache = new Map();
 let _readerDb = null;
+let _stripGen  = 0; // bumped on every buildStrip call to cancel stale loads
 
 function _openReaderDb() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('nhentai-image-cache', 4);
+    const req = indexedDB.open('nhentai-image-cache', 6);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
-      if (e.oldVersion < 3) {
-        if (db.objectStoreNames.contains('images')) db.deleteObjectStore('images');
-        const s = db.createObjectStore('images', { keyPath: 'url' });
-        s.createIndex('mediaId',   'mediaId',   { unique: false });
-        s.createIndex('galleryId', 'galleryId', { unique: false });
-      }
-      if (!db.objectStoreNames.contains('metadata'))
-        db.createObjectStore('metadata', { keyPath: 'galleryId' });
+      for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name);
+      const s = db.createObjectStore('images', { keyPath: 'url' });
+      s.createIndex('mediaId',   'mediaId',   { unique: false });
+      s.createIndex('galleryId', 'galleryId', { unique: false });
+      db.createObjectStore('metadata',  { keyPath: 'galleryId' });
+      db.createObjectStore('galleries', { keyPath: 'galleryId' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror   = () => reject(req.error);
@@ -97,6 +96,7 @@ const clickPrev     = document.getElementById('clickPrev');
 const clickNext     = document.getElementById('clickNext');
 const dClickPrev    = document.getElementById('dClickPrev');
 const dClickNext    = document.getElementById('dClickNext');
+const scrollTopBtn  = document.getElementById('scrollTopBtn');
 
 // ── Reliable message with retry (wakes sleeping service worker) ──
 function sendMsg(msg, retries = 5) {
@@ -131,30 +131,24 @@ async function init() {
   loadingText.textContent = 'Loading cached pages…';
   const gid = String(galleryId);
 
-  // Fetch page list directly from IDB — no service-worker round-trip needed.
-  let rawPages = await new Promise((resolve, reject) => {
+  // Fetch page list directly from IDB using key-only cursor — no dataUrls loaded.
+  const rawUrls = await new Promise((resolve, reject) => {
+    const urls = [];
     const tx  = _readerDb.transaction('images', 'readonly');
-    const req = tx.objectStore('images').index('galleryId').getAll(IDBKeyRange.only(gid));
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror   = () => reject(req.error);
+    const req = tx.objectStore('images').index('galleryId').openKeyCursor(IDBKeyRange.only(gid));
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) { urls.push(cursor.primaryKey); cursor.continue(); } else resolve(urls);
+    };
+    req.onerror = () => reject(req.error);
   }).catch(() => []);
 
-  // Fallback: full scan when index is unpopulated (older records).
-  if (rawPages.length === 0) {
-    rawPages = await new Promise((resolve, reject) => {
-      const tx  = _readerDb.transaction('images', 'readonly');
-      const req = tx.objectStore('images').getAll();
-      req.onsuccess = () => resolve((req.result || []).filter(r => String(r.galleryId) === gid));
-      req.onerror   = () => reject(req.error);
-    }).catch(() => []);
-  }
+  if (rawUrls.length === 0) { showEmpty(); return; }
 
-  if (rawPages.length === 0) { showEmpty(); return; }
-
-  pages = rawPages
-    .map(r => {
-      const m = r.url.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
-      return { pageNum: m ? parseInt(m[1]) : 9999, url: r.url };
+  pages = rawUrls
+    .map(url => {
+      const m = url.match(/\/(\d+)\.(webp|jpg|jpeg|png|gif)$/i);
+      return { pageNum: m ? parseInt(m[1]) : 9999, url };
     })
     .sort((a, b) => a.pageNum - b.pageNum);
 
@@ -198,7 +192,9 @@ async function init() {
   scrubber.value = 1;
 
   buildThumbs();
-  setMode('strip', true); // init without animation
+  const saved = await chrome.storage.local.get(['readerMode', 'readerLastPageMode']);
+  if (saved.readerLastPageMode) lastPageMode = saved.readerLastPageMode;
+  setMode(saved.readerMode || 'strip', true);
   goTo(1);
 }
 
@@ -339,26 +335,37 @@ function rebuildStripObserver() {
 }
 
 function buildStrip() {
-  // disconnect old observer
   if (stripObserver) { stripObserver.disconnect(); stripObserver = null; }
   stripView.innerHTML = '';
+  const gen = ++_stripGen;
 
+  // Append all elements first so DOM order is fixed before any async work.
   pages.forEach((p, i) => {
     const img = document.createElement('img');
     img.className    = 'page-img';
-    img.loading      = 'lazy';
     img.dataset.page = i + 1;
-    fetchPageDataUrl(p).then(url => { img.src = url; });
     stripView.appendChild(img);
   });
 
-  // Track current page while scrolling
   rebuildStripObserver();
+
+  // Load srcs sequentially top-to-bottom to avoid layout shifts from
+  // parallel fetches resolving in arbitrary order.
+  (async () => {
+    for (let i = 0; i < pages.length; i++) {
+      if (_stripGen !== gen) return;
+      const url = await fetchPageDataUrl(pages[i]);
+      if (_stripGen !== gen) return;
+      const img = stripView.querySelector(`[data-page="${i + 1}"]`);
+      if (img) img.src = url;
+    }
+  })();
 }
 
 // ── Mode switching ──
 function setMode(m, skipAnim) {
   if (stripObserver && m !== 'strip') { stripObserver.disconnect(); stripObserver = null; }
+  if (m !== 'strip') scrollTopBtn.classList.remove('visible');
 
   mode = m;
   applyScrollLayout();
@@ -376,6 +383,7 @@ function setMode(m, skipAnim) {
   // Update layout toggle + single/double sub-toggle
   const isPage = m !== 'strip';
   if (isPage) lastPageMode = m;
+  chrome.storage.local.set({ readerMode: m, readerLastPageMode: lastPageMode });
   btnLayoutToggle.innerHTML = isPage ? SVG_PAGE : SVG_STRIP;
   btnLayoutToggle.classList.add('active');
   btnPageSubToggle.style.display = isPage ? '' : 'none';
@@ -434,6 +442,12 @@ scrubToggle.addEventListener('click', () => setScrubVisible(!scrubVisible));
 btnLayoutToggle.addEventListener('click', () => setMode(mode === 'strip' ? lastPageMode : 'strip'));
 btnPageSubToggle.addEventListener('click', () => setMode(mode === 'double' ? 'single' : 'double'));
 
+// Scroll-to-top button
+scrollTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+window.addEventListener('scroll', () => {
+  scrollTopBtn.classList.toggle('visible', mode === 'strip' && window.scrollY > 400);
+}, { passive: true });
+
 // Thumbs
 thumbBtn.addEventListener('click', () => setThumbsOpen(!thumbsOpen));
 
@@ -466,15 +480,20 @@ document.addEventListener('keydown', (e) => {
   if (mode === 'strip') {
     if (fwd || bck) {
       e.preventDefault();
-      const next = Math.max(1, Math.min(pages.length, currentPage + (fwd ? 1 : -1)));
-      const t = stripView.querySelector(`[data-page="${next}"]`);
-      if (t) t.scrollIntoView({ behavior: 'smooth' });
+      if (e.shiftKey) {
+        if (fwd) window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        else     window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        const next = Math.max(1, Math.min(pages.length, currentPage + (fwd ? 1 : -1)));
+        const t = stripView.querySelector(`[data-page="${next}"]`);
+        if (t) t.scrollIntoView({ behavior: 'smooth' });
+      }
     }
     if (e.key === 'Home') { e.preventDefault(); window.scrollTo(0, 0); }
     if (e.key === 'End')  { e.preventDefault(); window.scrollTo(0, document.body.scrollHeight); }
   } else {
-    if (fwd) { e.preventDefault(); goTo(currentPage + step); }
-    if (bck) { e.preventDefault(); goTo(currentPage - step); }
+    if (fwd) { e.preventDefault(); e.shiftKey ? goTo(pages.length) : goTo(currentPage + step); }
+    if (bck) { e.preventDefault(); e.shiftKey ? goTo(1) : goTo(currentPage - step); }
     if (e.key === 'Home') goTo(1);
     if (e.key === 'End')  goTo(pages.length);
   }

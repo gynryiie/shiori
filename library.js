@@ -67,6 +67,54 @@ function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// ── Thumbnail moiré reduction ──
+const _thumbCache = new Map();
+
+function makeThumbnail(dataUrl) {
+  if (_thumbCache.has(dataUrl)) return Promise.resolve(_thumbCache.get(dataUrl));
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const THUMB_W = 400;
+      const scale   = THUMB_W / img.naturalWidth;
+      const thumbH  = Math.round(img.naturalHeight * scale);
+
+      // Step 1: halve resolution with pre-blur to low-pass filter before downscaling
+      const tmp  = document.createElement('canvas');
+      tmp.width  = Math.round(img.naturalWidth / 2);
+      tmp.height = Math.round(img.naturalHeight / 2);
+      const tctx = tmp.getContext('2d');
+      tctx.filter = 'blur(0.4px)';
+      tctx.drawImage(img, 0, 0, tmp.width, tmp.height);
+
+      // Step 2: scale to final thumbnail size
+      const out  = document.createElement('canvas');
+      out.width  = THUMB_W;
+      out.height = thumbH;
+      const octx = out.getContext('2d');
+      octx.imageSmoothingEnabled = true;
+      octx.imageSmoothingQuality = 'high';
+      octx.drawImage(tmp, 0, 0, THUMB_W, thumbH);
+
+      const result = out.toDataURL('image/jpeg', 0.88);
+      _thumbCache.set(dataUrl, result);
+      resolve(result);
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+async function processVisibleThumbs() {
+  const imgs = document.querySelectorAll('.card-thumb:not([data-moire-done])');
+  for (const img of imgs) {
+    img.dataset.moireDone = '1';
+    const orig = img.src;
+    if (!orig) continue;
+    img.src = await makeThumbnail(orig);
+  }
+}
+
 function renderGrid(galleries) {
   const grid = document.getElementById('grid');
 
@@ -116,7 +164,7 @@ function renderGrid(galleries) {
     const bodyHtml = `
       <div class="card-body">
         <div class="card-id-row">
-          <div class="card-id" data-original="${g.id}">#${g.id}</div>
+          <div class="card-id${g.isLocalImport ? ' local' : ''}" data-original="${g.id}">#${g.id}</div>
           ${actionsHtml}
         </div>
         ${titleHtml}
@@ -127,7 +175,7 @@ function renderGrid(galleries) {
     const overlayBodyHtml = `
       <div class="card-body">
         <div class="card-id-row">
-          <div class="card-id" data-original="${g.id}">#${g.id}</div>
+          <div class="card-id${g.isLocalImport ? ' local' : ''}" data-original="${g.id}">#${g.id}</div>
           ${actionsHtml}
         </div>
         ${titleHtml}
@@ -333,6 +381,7 @@ function applyFilters() {
 
   renderGrid(pageSlice);
   renderPagination(currentPage, totalPages);
+  processVisibleThumbs();
 }
 
 function renderPagination(page, totalPages) {
@@ -436,37 +485,36 @@ function _patchCovers(galleries) {
     if (!g.cover) continue;
     const card = document.querySelector(`.card[data-gallery-id="${g.id}"]`);
     if (!card) continue;
-    const wrap = card.querySelector('.card-thumb-wrap');
-    if (!wrap) continue;
-    const existing = wrap.querySelector('.card-thumb');
-    if (existing) {
-      existing.src = g.cover;
-    } else {
-      wrap.innerHTML = `<img class="card-thumb" src="${g.cover}" alt="">`;
-    }
+    card.querySelectorAll('.card-thumb-wrap').forEach(wrap => {
+      const existing = wrap.querySelector('.card-thumb');
+      if (existing) {
+        existing.src = g.cover;
+      } else {
+        wrap.innerHTML = `<img class="card-thumb" src="${g.cover}" alt="">`;
+      }
+    });
   }
 }
 
 // ── Local CBZ import (processed in-page; no large-buffer IPC to background) ──
 
 const _DB_NAME    = 'nhentai-image-cache';
-const _DB_VERSION = 4;
+const _DB_VERSION = 6;
 const _STORE      = 'images';
 const _META_STORE = 'metadata';
+const _GAL_STORE  = 'galleries';
 
 function _openImportDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(_DB_NAME, _DB_VERSION);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
-      if (e.oldVersion < 3) {
-        if (db.objectStoreNames.contains(_STORE)) db.deleteObjectStore(_STORE);
-        const s = db.createObjectStore(_STORE, { keyPath: 'url' });
-        s.createIndex('mediaId',   'mediaId',   { unique: false });
-        s.createIndex('galleryId', 'galleryId', { unique: false });
-      }
-      if (!db.objectStoreNames.contains(_META_STORE))
-        db.createObjectStore(_META_STORE, { keyPath: 'galleryId' });
+      for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name);
+      const s = db.createObjectStore(_STORE, { keyPath: 'url' });
+      s.createIndex('mediaId',   'mediaId',   { unique: false });
+      s.createIndex('galleryId', 'galleryId', { unique: false });
+      db.createObjectStore(_META_STORE, { keyPath: 'galleryId' });
+      db.createObjectStore(_GAL_STORE,  { keyPath: 'galleryId' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror   = () => reject(req.error);
@@ -630,6 +678,20 @@ async function importSingleFile(file, gid) {
   });
 
   const existingPages = await _getExistingPageNums(db, gid);
+
+  // Read existing gallery entry so re-imports can add to existing stats.
+  const existingGal = await new Promise((resolve, reject) => {
+    const tx = db.transaction(_GAL_STORE, 'readonly');
+    const req = tx.objectStore(_GAL_STORE).get(gid);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+  let galCount = existingGal?.count || 0;
+  let galSize  = existingGal?.size  || 0;
+  let galLatestAt  = existingGal?.latestAt  || 0;
+  let galCover     = existingGal?.cover     || null;
+  let galCoverPage = existingGal?.coverPage ?? 9999;
+
   setFill(0); setLabel(`0 / ${total}`);
 
   let done = 0, skipped = 0, coverPatched = false;
@@ -644,10 +706,15 @@ async function importSingleFile(file, gid) {
                   : ext === 'webp' ? 'image/webp' : 'image/gif';
     const url     = `local://${gid}/${pageNum}.${ext}`;
     const dataUrl = `data:${mime};base64,` + _u8ToB64(en.data);
-    await _idbPut(db, _STORE, {
-      url, dataUrl, galleryId: gid,
-      cachedAt: Date.now(), size: Math.round(dataUrl.length * 0.75)
-    });
+    const size    = Math.round(dataUrl.length * 0.75);
+    const now     = Date.now();
+    await _idbPut(db, _STORE, { url, dataUrl, galleryId: gid, cachedAt: now, size });
+
+    galCount++;
+    galSize += size;
+    galLatestAt = Math.max(galLatestAt, now);
+    if (pageNum < galCoverPage) { galCoverPage = pageNum; galCover = dataUrl; }
+
     if (!coverPatched) {
       coverPatched = true;
       const gEntry = allGalleries.find(g => g.id === gid);
@@ -659,10 +726,27 @@ async function importSingleFile(file, gid) {
     setLabel(`${done} / ${total}`);
   }
 
+  await _idbPut(db, _GAL_STORE, { galleryId: gid, count: galCount, size: galSize, latestAt: galLatestAt, cover: galCover, coverPage: galCoverPage });
+
+  // Patch the in-memory entry and card meta in-place so the next file's
+  // card is not wiped by a concurrent loadAll re-render.
+  const gEntry = allGalleries.find(g => g.id === gid);
+  if (gEntry) {
+    gEntry.count = galCount;
+    gEntry.size  = galSize;
+    if (galCover) gEntry.cover = galCover;
+    const metaLine = `${galCount} pages · ${formatSize(galSize)}`;
+    document.querySelectorAll(`[data-gallery-id="${gid}"] .card-meta`).forEach(el => {
+      el.textContent = metaLine;
+    });
+    updateHeaderStats();
+  }
+
   if (fillEl) fillEl.classList.add('done');
   if (dlBtn)  { dlBtn.disabled = false; dlBtn.innerHTML = '✓'; dlBtn.classList.add('done'); }
   const imported = done - skipped;
   setLabel(skipped > 0 ? `Done — ${imported} imported, ${skipped} already cached` : `Done — ${imported}/${total} pages`);
+  if (progEl) progEl.closest('.card-body')?.classList.remove('downloading');
   chrome.runtime.sendMessage({ type: 'FETCH_METADATA', galleryId: gid });
 }
 
@@ -675,7 +759,7 @@ document.getElementById('cbzFileInput').addEventListener('change', async (e) => 
   for (let i = 0; i < files.length; i++) {
     await importSingleFile(files[i], String(base + i));
   }
-  loadAll(true);
+  await loadAll(true);
 });
 
 // ── Debug ZIP export ──
@@ -1000,7 +1084,9 @@ document.addEventListener('keydown', (e) => {
   if (!fwd && !bck) return;
   e.preventDefault();
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const next = Math.max(1, Math.min(totalPages, currentPage + (fwd ? 1 : -1)));
+  const next = e.shiftKey
+    ? (fwd ? totalPages : 1)
+    : Math.max(1, Math.min(totalPages, currentPage + (fwd ? 1 : -1)));
   if (next === currentPage) return;
   currentPage = next;
   applyFilters();

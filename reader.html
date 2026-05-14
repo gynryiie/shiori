@@ -209,6 +209,19 @@
     /* ── All modes use document scroll ── */
     html.reader-scroll, body.reader-scroll { height: auto; }
 
+    /* ── Scroll-to-top button (strip mode only) ── */
+    #scrollTopBtn {
+      position: fixed; bottom: 28px; right: 18px; z-index: 300;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--muted); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s, border-color 0.12s, color 0.12s;
+    }
+    #scrollTopBtn.visible { opacity: 1; pointer-events: all; }
+    #scrollTopBtn:hover { border-color: var(--accent); color: var(--accent); }
+
     /* ── Loading / Empty ── */
     #loadingScreen {
       position: fixed; inset: 0; display: flex; flex-direction: column;
@@ -307,6 +320,10 @@
   </div>
 </div>
 
+<button id="scrollTopBtn" title="Back to top">
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+</button>
+
 <div id="keybindModal">
   <div id="keybindBox">
     <div class="kb-heading">Keyboard Shortcuts</div>
@@ -314,8 +331,8 @@
     <div class="kb-section">Navigation</div>
     <div class="kb-row"><span class="kb-desc">Next page</span><div class="kb-keys"><kbd class="kb-key">→</kbd><kbd class="kb-key">↓</kbd><kbd class="kb-key">Space</kbd><kbd class="kb-key">S</kbd><kbd class="kb-key">D</kbd></div></div>
     <div class="kb-row"><span class="kb-desc">Previous page</span><div class="kb-keys"><kbd class="kb-key">←</kbd><kbd class="kb-key">↑</kbd><kbd class="kb-key">W</kbd><kbd class="kb-key">A</kbd></div></div>
-    <div class="kb-row"><span class="kb-desc">First page</span><div class="kb-keys"><kbd class="kb-key">Home</kbd></div></div>
-    <div class="kb-row"><span class="kb-desc">Last page</span><div class="kb-keys"><kbd class="kb-key">End</kbd></div></div>
+    <div class="kb-row"><span class="kb-desc">First page</span><div class="kb-keys"><kbd class="kb-key">Home</kbd><kbd class="kb-key">Shift+←</kbd><kbd class="kb-key">Shift+↑</kbd><kbd class="kb-key">Shift+W</kbd><kbd class="kb-key">Shift+A</kbd></div></div>
+    <div class="kb-row"><span class="kb-desc">Last page</span><div class="kb-keys"><kbd class="kb-key">End</kbd><kbd class="kb-key">Shift+→</kbd><kbd class="kb-key">Shift+↓</kbd><kbd class="kb-key">Shift+S</kbd><kbd class="kb-key">Shift+D</kbd></div></div>
 
     <div class="kb-section">View Mode</div>
     <div class="kb-row"><span class="kb-desc">Single page</span><div class="kb-keys"><kbd class="kb-key">1</kbd></div></div>
