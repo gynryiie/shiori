@@ -92,3 +92,46 @@ document.getElementById('saveBehaviorBtn').addEventListener('click', () => {
   });
 });
 
+// ── Changelog — parsed from CHANGELOG.md at runtime ───────────────────────
+
+(async () => {
+  try {
+    const text = await fetch(chrome.runtime.getURL('CHANGELOG.md')).then(r => r.text());
+    const body = document.getElementById('changelogBody');
+
+    const entries = [];
+    let cur = null, curSection = null;
+
+    for (const raw of text.split('\n')) {
+      const line = raw.trim();
+      if (line.startsWith('## ')) {
+        if (cur) entries.push(cur);
+        const m = line.match(/^## (.+?) — (.+)$/);
+        cur = { version: m ? m[1] : line.slice(3), date: m ? m[2].trim() : '', sections: [], plain: [] };
+        curSection = null;
+      } else if (line.startsWith('### ')) {
+        curSection = { title: line.slice(4), items: [] };
+        cur?.sections.push(curSection);
+      } else if (line.startsWith('- ') && curSection) {
+        curSection.items.push(line.slice(2));
+      } else if (line && !line.startsWith('#') && cur && !curSection) {
+        cur.plain.push(line);
+      }
+    }
+    if (cur) entries.push(cur);
+
+    body.innerHTML = entries.map(e => `
+      <div class="cl-entry">
+        <div class="cl-version">${e.version} <span class="cl-date">${e.date}</span></div>
+        ${e.sections.map(s => `
+          <div class="cl-section">${s.title}</div>
+          <ul class="cl-list">${s.items.map(i => `<li>${i}</li>`).join('')}</ul>
+        `).join('')}
+        ${e.plain.length ? `<ul class="cl-list">${e.plain.map(p => `<li>${p}</li>`).join('')}</ul>` : ''}
+      </div>
+    `).join('');
+  } catch {
+    // Silently skip if CHANGELOG.md is missing
+  }
+})();
+

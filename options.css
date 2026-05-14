@@ -171,6 +171,7 @@ input:checked + .slider::before { transform: translateX(18px); background: white
 .cl-entry { display: flex; flex-direction: column; gap: 8px; }
 .cl-version { font-size: 12px; font-weight: 700; color: var(--accent2); }
 .cl-date { font-size: 10px; color: var(--muted); font-weight: 400; margin-left: 8px; }
+.cl-section { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-top: 4px; }
 .cl-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
 .cl-list li { font-size: 11px; color: var(--muted); padding-left: 12px; position: relative; line-height: 1.5; }
 .cl-list li::before { content: '—'; position: absolute; left: 0; color: var(--border); }
