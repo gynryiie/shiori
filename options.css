@@ -168,10 +168,61 @@ input:checked + .slider::before { transform: translateX(18px); background: white
 }
 .btn-clear-all:hover { background: var(--danger); color: white; }
 
+.header-right { display: flex; align-items: center; gap: 8px; }
+
+.btn-about {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); font-family: inherit; font-size: 11px;
+  padding: 5px 12px; border-radius: 5px; cursor: pointer;
+  transition: all 0.12s;
+}
+.btn-about:hover { border-color: var(--accent2); color: var(--accent2); }
+
+/* ── About modal ── */
+#aboutModal {
+  display: none; position: fixed; inset: 0; z-index: 400;
+  background: rgba(0,0,0,0.65);
+  align-items: center; justify-content: center;
+}
+#aboutModal.show { display: flex; }
+
+#aboutBox {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; width: 520px; max-width: 94vw;
+  max-height: 80vh; display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+.about-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.about-brand { display: flex; align-items: center; gap: 8px; }
+.about-version {
+  font-size: 10px; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 2px 7px; margin-left: 4px;
+}
+.about-close {
+  background: none; border: none; color: var(--muted);
+  font-size: 14px; cursor: pointer; padding: 2px 6px;
+  border-radius: 4px; transition: color 0.12s;
+}
+.about-close:hover { color: var(--text); }
+
+.about-scroll {
+  overflow-y: auto; padding: 20px;
+  display: flex; flex-direction: column; gap: 24px;
+}
+.about-scroll::-webkit-scrollbar { width: 4px; }
+.about-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── Changelog entries ── */
 .cl-entry { display: flex; flex-direction: column; gap: 8px; }
+.cl-entry + .cl-entry { padding-top: 20px; border-top: 1px solid var(--border); }
 .cl-version { font-size: 12px; font-weight: 700; color: var(--accent2); }
 .cl-date { font-size: 10px; color: var(--muted); font-weight: 400; margin-left: 8px; }
-.cl-section { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-top: 4px; }
+.cl-section { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-top: 6px; }
 .cl-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
 .cl-list li { font-size: 11px; color: var(--muted); padding-left: 12px; position: relative; line-height: 1.5; }
 .cl-list li::before { content: '—'; position: absolute; left: 0; color: var(--border); }

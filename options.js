@@ -92,13 +92,28 @@ document.getElementById('saveBehaviorBtn').addEventListener('click', () => {
   });
 });
 
-// ── Changelog — parsed from CHANGELOG.md at runtime ───────────────────────
+// ── About modal ───────────────────────────────────────────────────────────
 
+const aboutModal = document.getElementById('aboutModal');
+const aboutBtn   = document.getElementById('aboutBtn');
+const aboutClose = document.getElementById('aboutClose');
+
+function setAboutOpen(open) {
+  aboutModal.classList.toggle('show', open);
+}
+
+aboutBtn.addEventListener('click', () => setAboutOpen(true));
+aboutClose.addEventListener('click', () => setAboutOpen(false));
+aboutModal.addEventListener('click', (e) => { if (!e.target.closest('#aboutBox')) setAboutOpen(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setAboutOpen(false); });
+
+// Version from manifest — single source of truth, always in sync.
+document.getElementById('aboutVersion').textContent = 'v' + chrome.runtime.getManifest().version;
+
+// Parse CHANGELOG.md and render into the scrollable modal body.
 (async () => {
   try {
     const text = await fetch(chrome.runtime.getURL('CHANGELOG.md')).then(r => r.text());
-    const body = document.getElementById('changelogBody');
-
     const entries = [];
     let cur = null, curSection = null;
 
@@ -120,7 +135,7 @@ document.getElementById('saveBehaviorBtn').addEventListener('click', () => {
     }
     if (cur) entries.push(cur);
 
-    body.innerHTML = entries.map(e => `
+    document.getElementById('aboutChangelog').innerHTML = entries.map(e => `
       <div class="cl-entry">
         <div class="cl-version">${e.version} <span class="cl-date">${e.date}</span></div>
         ${e.sections.map(s => `
@@ -131,7 +146,8 @@ document.getElementById('saveBehaviorBtn').addEventListener('click', () => {
       </div>
     `).join('');
   } catch {
-    // Silently skip if CHANGELOG.md is missing
+    document.getElementById('aboutChangelog').innerHTML =
+      '<p style="font-size:11px;color:var(--muted)">Changelog unavailable.</p>';
   }
 })();
 

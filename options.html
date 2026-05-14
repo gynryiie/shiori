@@ -16,6 +16,9 @@
     <span class="brand-sep">/</span>
     <span class="brand-page">Settings</span>
   </div>
+  <div class="header-right">
+    <button class="btn-about" id="aboutBtn">About</button>
+  </div>
 </header>
 
 <div class="content">
@@ -84,14 +87,21 @@
     </div>
   </div>
 
-  <!-- Changelog -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-title">Changelog</div>
-    </div>
-    <div class="section-body" id="changelogBody" style="gap:16px"></div>
-  </div>
+</div>
 
+<!-- About modal -->
+<div id="aboutModal">
+  <div id="aboutBox">
+    <div class="about-header">
+      <div class="about-brand">
+        <div class="brand-icon">💾</div>
+        <span class="brand-text">Shiori</span>
+        <span class="about-version" id="aboutVersion"></span>
+      </div>
+      <button class="about-close" id="aboutClose">✕</button>
+    </div>
+    <div class="about-scroll" id="aboutChangelog"></div>
+  </div>
 </div>
 
 <script src="options.js"></script>
