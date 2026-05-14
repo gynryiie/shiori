@@ -23,6 +23,22 @@ $patched  = $manifest -replace '"version"\s*:\s*"[^"]*"', "`"version`": `"$Versi
 )
 Write-Host "manifest.json  →  v$Version" -ForegroundColor Cyan
 
+# Build distributable zip.
+$zip = "shiori-v$Version.zip"
+if (Test-Path $zip) { Remove-Item $zip }
+$include = @(
+    'manifest.json','background.js','content.js',
+    'library.html','library.js',
+    'reader.html','reader.js',
+    'options.html','options.js','options.css',
+    'popup.html','popup.js',
+    'CHANGELOG.md'
+)
+$paths = $include | Where-Object { Test-Path $_ }
+Compress-Archive -Path $paths -DestinationPath $zip
+Compress-Archive -Path 'icons','assets' -Update -DestinationPath $zip
+Write-Host "$zip built" -ForegroundColor Cyan
+
 # Commit, tag, push.
 git add manifest.json CHANGELOG.md
 git commit -m "chore: release v$Version"
