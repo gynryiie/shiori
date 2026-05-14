@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Shiori",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Caches gallery images locally for offline reading. 栞",
   "permissions": [
     "storage",
