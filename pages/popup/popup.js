@@ -92,7 +92,7 @@ function _renderGalleryList(data) {
       : '';
 
     const tagsHtml  = buildTagsHtml(gallery.tags);
-    const readerUrl = chrome.runtime.getURL(`reader.html`) + `?g=${gallery.id}`;
+    const readerUrl = chrome.runtime.getURL(`pages/reader/reader.html`) + `?g=${gallery.id}`;
 
     item.innerHTML = `
       <a class="gallery-link" href="${readerUrl}" target="_blank">
@@ -171,7 +171,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 function openLibrary() {
-  const url = chrome.runtime.getURL('library.html');
+  const url = chrome.runtime.getURL('pages/library/library.html');
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs[0]) chrome.tabs.update(tabs[0].id, { url });
     else chrome.tabs.create({ url });
@@ -196,7 +196,7 @@ document.getElementById('refreshBtn').addEventListener('click', async (e) => {
 document.getElementById('viewAllBtn').addEventListener('click', openLibrary);
 
 document.getElementById('uploadCbzBtn').addEventListener('click', () => {
-  const url = chrome.runtime.getURL('library.html') + '?import=1';
+  const url = chrome.runtime.getURL('pages/library/library.html') + '?import=1';
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs[0]) chrome.tabs.update(tabs[0].id, { url });
     else chrome.tabs.create({ url });

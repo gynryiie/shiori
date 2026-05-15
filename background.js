@@ -1,7 +1,7 @@
 // background.js — Service worker
 
 const DB_NAME = 'nhentai-image-cache';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const STORE = 'images';
 const META_STORE = 'metadata';
 const GALLERY_STORE = 'galleries';
@@ -45,6 +45,23 @@ function localPageUrl(galleryId, pageNum, ext) {
   return `local://nhentai/${galleryId}/${pageNum}.${ext}`;
 }
 
+// ── Lifetime write counter ──
+
+let _writtenBytesPending = 0;
+let _writtenBytesTimer   = null;
+function _queueWrittenBytes(bytes) {
+  _writtenBytesPending += bytes;
+  clearTimeout(_writtenBytesTimer);
+  _writtenBytesTimer = setTimeout(() => {
+    _writtenBytesTimer = null;
+    const pending = _writtenBytesPending;
+    _writtenBytesPending = 0;
+    chrome.storage.local.get(['totalWrittenBytes'], r => {
+      chrome.storage.local.set({ totalWrittenBytes: (r.totalWrittenBytes || 0) + pending });
+    });
+  }, 2000);
+}
+
 let _db = null;
 function openDB() {
   if (_db) return Promise.resolve(_db);
@@ -56,7 +73,8 @@ function openDB() {
       const s = db.createObjectStore(STORE, { keyPath: 'url' });
       s.createIndex('mediaId', 'mediaId', { unique: false });
       s.createIndex('galleryId', 'galleryId', { unique: false });
-      db.createObjectStore(META_STORE, { keyPath: 'galleryId' });
+      const metaStore = db.createObjectStore(META_STORE, { keyPath: 'galleryId' });
+      metaStore.createIndex('sourceId', 'sourceId', { unique: false });
       db.createObjectStore(GALLERY_STORE, { keyPath: 'galleryId' });
     };
     req.onsuccess = () => {
@@ -91,7 +109,7 @@ async function dbPut(url, dataUrl, mediaId, galleryId) {
 
   return new Promise((resolve, reject) => {
     const tx = db.transaction([STORE, GALLERY_STORE], 'readwrite');
-    tx.oncomplete = () => resolve();
+    tx.oncomplete = () => { _queueWrittenBytes(size); resolve(); };
     tx.onerror = () => reject(tx.error);
 
     tx.objectStore(STORE).put({ url: canonUrl, dataUrl, mediaId: String(mediaId), galleryId: gid, cachedAt, size });
@@ -221,19 +239,22 @@ async function rebuildGalleryEntry(galleryId) {
 
 // ── Metadata fetch from nhentai API ──
 
-async function fetchAndStoreMetadata(galleryId, apiKey = null) {
+async function fetchAndStoreMetadata(galleryId, apiKey = null, nhentaiId = null) {
   const existing = await metaGet(galleryId);
-  if (existing && !existing.isLocalImport && !existing.isStub) return existing;
+  if (existing && !existing.isLocalImport && !existing.isStub && existing.pageExts?.length) return existing;
+
+  const fetchId = nhentaiId || existing?.sourceId || galleryId;
 
   try {
     const headers = { 'Referer': 'https://nhentai.net/' };
     if (apiKey) headers['Authorization'] = `Key ${apiKey}`;
-    const resp = await fetch(`https://nhentai.net/api/v2/galleries/${galleryId}`, { headers });
+    const resp = await fetch(`https://nhentai.net/api/v2/galleries/${fetchId}`, { headers });
     if (!resp.ok) return existing || null;
     const data = await resp.json();
 
     const meta = {
-      galleryId: String(data.id),
+      galleryId: galleryId,
+      sourceId: String(data.id),
       mediaId: String(data.media_id),
       titleEnglish: data.title?.english || '',
       titleJapanese: data.title?.japanese || '',
@@ -245,10 +266,21 @@ async function fetchAndStoreMetadata(galleryId, apiKey = null) {
       pageExts: (data.pages || []).map(p => p.path?.match(/\.(\w+)$/)?.[1]?.toLowerCase() || 'jpg'),
       fetchedAt: Date.now(),
       isLocalImport: existing != null && existing.isLocalImport === true,
-      source: existing?.source ?? 'nhentai.net'
+      source: existing?.source ?? 'nhentai.net',
+      sourceMetadata: {
+        id: data.id,
+        media_id: data.media_id,
+        title: data.title,
+        tags: data.tags,
+        num_pages: data.num_pages,
+        num_favorites: data.num_favorites,
+        upload_date: data.upload_date,
+        pages: data.pages,
+      },
     };
 
     await metaPut(meta);
+    _sourceIdToGalleryId.set(String(data.id), galleryId);
     return meta;
   } catch (e) {
     console.error('[shiori] metadata fetch error:', galleryId, e.message);
@@ -423,13 +455,16 @@ async function unzipCbz(buffer) {
 // For downloaded galleries:  urlBuilder = (pageNum, ext) => real CDN URL
 // For local imports:         urlBuilder = (pageNum, ext) => localPageUrl(gid, pageNum, ext)
 
-async function storeCbzEntries(imageEntries, mediaId, galleryId, urlBuilder, sendProgress, skipExisting = false) {
+async function storeCbzEntries(imageEntries, mediaId, galleryId, urlBuilder, sendProgress, skipExisting = false, knownTotal = 0) {
   const gid = String(galleryId);
   const total = imageEntries.length;
+  const reportTotal = knownTotal || total;
 
   let existingPageNums = new Set();
+  let existingCheckMs = 0;
   if (skipExisting) {
     const db = await openDB();
+    const tCheck0 = performance.now();
     existingPageNums = await new Promise((resolve, reject) => {
       const pages = new Set();
       const tx  = db.transaction(STORE, 'readonly');
@@ -443,12 +478,14 @@ async function storeCbzEntries(imageEntries, mediaId, galleryId, urlBuilder, sen
       };
       req.onerror = () => reject(req.error);
     });
+    existingCheckMs = performance.now() - tCheck0;
   } else {
     await deleteGalleryImages(gid);
   }
 
-  sendProgress({ done: 0, total, skipped: 0, status: 'started' });
+  if (!knownTotal) sendProgress({ done: 0, total: reportTotal, skipped: 0, status: 'started' });
 
+  const tStore0 = performance.now();
   let done = 0, skipped = 0;
   for (let i = 0; i < imageEntries.length; i++) {
     const entry = imageEntries[i];
@@ -458,7 +495,7 @@ async function storeCbzEntries(imageEntries, mediaId, galleryId, urlBuilder, sen
 
     if (skipExisting && existingPageNums.has(pageNum)) {
       skipped++;
-      sendProgress({ done, total, skipped, status: 'progress' });
+      sendProgress({ done, total: reportTotal, skipped, status: 'progress' });
       continue;
     }
 
@@ -472,10 +509,11 @@ async function storeCbzEntries(imageEntries, mediaId, galleryId, urlBuilder, sen
 
     await dbPut(url, dataUrl, mediaId, gid);
     done++;
-    sendProgress({ done, total, skipped, status: 'progress' });
+    sendProgress({ done, total: reportTotal, skipped, status: 'progress' });
   }
 
-  sendProgress({ done, total, skipped, status: 'done' });
+  sendProgress({ done, total: reportTotal, skipped, status: 'done' });
+  return { existingCheckMs, storeLoopMs: performance.now() - tStore0 };
 }
 
 async function deleteGalleryImages(galleryId) {
@@ -528,36 +566,84 @@ async function rekeyGallery(oldGid, newGid) {
   }
 }
 
+// Returns an estimated average image size (bytes) derived from the DB.
+// Falls back to 310 KB if the DB is empty, or if the DB average diverges
+// from the fallback by >25% but the sample is too small to trust (<30 images).
+async function getAvgImageSize() {
+  const FALLBACK = 310 * 1024;
+  try {
+    const entries = await galleryGetAll();
+    let totalImages = 0, totalSize = 0;
+    for (const e of entries) { totalImages += e.count; totalSize += e.size; }
+    if (totalImages === 0) return FALLBACK;
+    const dbAvg = totalSize / totalImages;
+    const ratio = dbAvg / FALLBACK;
+    if ((ratio > 1.25 || ratio < 0.75) && totalImages < 30) return FALLBACK;
+    return Math.round(dbAvg);
+  } catch {
+    return FALLBACK;
+  }
+}
+
 // ── Domain-aware dispatch helpers ──
 // Add a branch here when supporting a new source site.
 
-async function fetchMetadataForGallery(galleryId, source, apiKey) {
-  if (source === 'nhentai.net') return fetchAndStoreMetadata(galleryId, apiKey);
+async function fetchMetadataForGallery(galleryId, source, apiKey, nhentaiId = null) {
+  if (source === 'nhentai.net') return fetchAndStoreMetadata(galleryId, apiKey, nhentaiId);
   return null;
 }
 
-async function downloadGallery(galleryId, source) {
+async function getCover(galleryId, source, apiKey = null) {
+  const gid = String(galleryId);
+  if (!SITES[source]?.canDownload) return null;
+
+  const galEntry = await galleryGet(gid);
+  if (galEntry && galEntry.count > 0) return null;
+
+  const meta = await fetchMetadataForGallery(gid, source, apiKey).catch(() => null);
+  if (!meta?.mediaId) return null;
+
+  const exts = meta.pageExts?.length ? [meta.pageExts[0]] : ['jpg', 'webp', 'png'];
+  for (const ext of exts) {
+    const url = `https://i.nhentai.net/galleries/${meta.mediaId}/1.${ext}`;
+    const dataUrl = await fetchAndCache(url, meta.mediaId, gid, null).catch(() => null);
+    if (dataUrl) return dataUrl;
+  }
+  return null;
+}
+
+async function downloadGallery(galleryId, source, overwrite = false) {
   if (source === 'nhentai.net') {
     const { apiKey } = await new Promise(r => chrome.storage.local.get(['apiKey'], r));
     if (!apiKey) throw new Error('No API key set — add one in Settings (⚙).');
-    return downloadAndCacheCbz(galleryId, apiKey);
+    return downloadAndCacheCbz(galleryId, apiKey, overwrite);
   }
   throw new Error(`Download not supported for ${SITES[source]?.name || source || 'unknown source'}.`);
 }
 
-async function downloadAndCacheCbz(galleryId, apiKey) {
+async function downloadAndCacheCbz(galleryId, apiKey, overwrite = false) {
   const gid = String(galleryId);
+  const t0 = performance.now();
   const sendProgress = (payload) =>
     chrome.runtime.sendMessage({ type: 'CACHE_PROGRESS', galleryId: gid, ...payload }).catch(() => {});
   const sendError = (error) => sendProgress({ status: 'error', error });
 
-  // Update metadata (title, tags, mediaId, etc.) from the API.
-  await fetchAndStoreMetadata(gid, apiKey);
+  // Phase 1: metadata fetch + read-back
+  const tMeta0 = performance.now();
+  const preMeta = await metaGet(gid);
+  await fetchAndStoreMetadata(gid, apiKey, preMeta?.sourceId || null);
+  const dlMeta = await metaGet(gid);
+  const metaMs = performance.now() - tMeta0;
 
-  // Request signed CBZ download URL from nhentai API v2
+  const nhentaiGid = dlMeta?.sourceId || gid;
+  const mediaId = dlMeta?.mediaId || gid;
+  const knownTotal = dlMeta?.numPages || 0;
+
+  // Phase 2: signed URL request
+  const tSign0 = performance.now();
   let dlResp;
   try {
-    dlResp = await fetch(`https://nhentai.net/api/v2/galleries/${gid}/download?format=cbz`, {
+    dlResp = await fetch(`https://nhentai.net/api/v2/galleries/${nhentaiGid}/download?format=cbz`, {
       method: 'POST',
       headers: { 'Authorization': `Key ${apiKey}`, 'Referer': 'https://nhentai.net/' }
     });
@@ -576,23 +662,23 @@ async function downloadAndCacheCbz(galleryId, apiKey) {
 
   let dlData;
   try { dlData = await dlResp.json(); } catch (e) { return sendError('Malformed API response.'); }
+  const signedUrlMs = performance.now() - tSign0;
 
   const signedUrl = dlData.url;
   if (!signedUrl) return sendError('No download URL in API response.');
 
-  // Some API responses include the file size — use it when present so the
-  // progress bar is deterministic even if the CDN omits Content-Length.
-  const apiKnownSize = dlData.size || dlData.file_size || dlData.filesize || 0;
+  // Show the page count immediately so the label reads "0 / N" from the start.
+  sendProgress({ status: 'started', done: 0, total: knownTotal, skipped: 0 });
 
-  // Fetch the CBZ archive from the signed URL, streaming progress back to UI
+  // Phase 3: CBZ download — estimate total size from per-image average * page count
+  const estimatedTotal = knownTotal > 0 ? knownTotal * (await getAvgImageSize()) : 0;
   let cbzBuffer;
+  const tDl0 = performance.now();
   try {
     const cbzResp = await fetch(signedUrl);
     if (!cbzResp.ok) return sendError(`CBZ download failed: ${cbzResp.status}`);
-    const contentLength = parseInt(cbzResp.headers.get('content-length') || '0');
-    const totalSize = apiKnownSize || contentLength;
     let downloaded = 0;
-    sendProgress({ status: 'downloading', downloaded: 0, total: totalSize });
+    sendProgress({ status: 'downloading', downloaded: 0, total: estimatedTotal, pages: knownTotal });
     const reader = cbzResp.body.getReader();
     const chunks = [];
     while (true) {
@@ -600,7 +686,7 @@ async function downloadAndCacheCbz(galleryId, apiKey) {
       if (done) break;
       chunks.push(value);
       downloaded += value.length;
-      sendProgress({ status: 'downloading', downloaded, total: totalSize });
+      sendProgress({ status: 'downloading', downloaded, total: estimatedTotal, pages: knownTotal });
     }
     const totalLen = chunks.reduce((s, c) => s + c.length, 0);
     const merged = new Uint8Array(totalLen);
@@ -610,27 +696,38 @@ async function downloadAndCacheCbz(galleryId, apiKey) {
   } catch (e) {
     return sendError('Failed to fetch CBZ file.');
   }
+  const downloadMs = performance.now() - tDl0;
 
-  // Parse ZIP entries
+  // Phase 4: ZIP extraction
   sendProgress({ status: 'extracting' });
+  const tUnzip0 = performance.now();
   let entries;
   try { entries = await unzipCbz(cbzBuffer); } catch (e) { return sendError('Failed to parse CBZ: ' + e.message); }
+  const unzipMs = performance.now() - tUnzip0;
 
   const imageEntries = sortImageEntries(entries);
   if (imageEntries.length === 0) return sendError('No images found in CBZ.');
-
-  const dlMeta = await metaGet(gid);
-  const mediaId = dlMeta?.mediaId || gid;
 
   // Downloaded galleries use real CDN URLs so they interop with the cache interceptor.
   const urlBuilder = (pageNum, ext) =>
     `https://i.nhentai.net/galleries/${mediaId}/${pageNum}.${ext}`;
 
-  await storeCbzEntries(imageEntries, mediaId, gid, urlBuilder, sendProgress, true);
+  // Phases 5+6: existing-page check + per-page store loop (timed inside storeCbzEntries)
+  const { existingCheckMs, storeLoopMs } =
+    await storeCbzEntries(imageEntries, mediaId, gid, urlBuilder, sendProgress, !overwrite, knownTotal);
 
-  // No longer a local import once fully downloaded from source.
-  const finalMeta = await metaGet(gid);
-  if (finalMeta?.isLocalImport) await metaPut({ ...finalMeta, isLocalImport: false });
+  const totalMs = performance.now() - t0;
+  const pct = (ms) => (ms / totalMs * 100).toFixed(1).padStart(5) + '%';
+  const ms  = (ms) => String(Math.round(ms)).padStart(6) + 'ms';
+  console.log(
+    `[shiori:timing] gallery ${gid}  total ${Math.round(totalMs)}ms\n` +
+    `  metadata fetch   ${ms(metaMs)}  ${pct(metaMs)}\n` +
+    `  signed URL req   ${ms(signedUrlMs)}  ${pct(signedUrlMs)}\n` +
+    `  CBZ download     ${ms(downloadMs)}  ${pct(downloadMs)}\n` +
+    `  ZIP extraction   ${ms(unzipMs)}  ${pct(unzipMs)}\n` +
+    `  existing check   ${ms(existingCheckMs)}  ${pct(existingCheckMs)}\n` +
+    `  page store loop  ${ms(storeLoopMs)}  ${pct(storeLoopMs)}`
+  );
 }
 
 // ── Local CBZ import ──
@@ -651,6 +748,8 @@ async function importLocalCbz(galleryId, title, cbzBuffer) {
 
   const imageEntries = sortImageEntries(entries);
   if (imageEntries.length === 0) return sendError('No images found in CBZ.');
+
+  const existingMeta = await metaGet(gid).catch(() => null);
 
   // Store minimal metadata so the library UI can render this gallery.
   await metaPut({
@@ -698,6 +797,31 @@ function sortImageEntries(entries) {
 const cachingInProgress = new Set();
 const metaFetchPending  = new Set(); // prevents duplicate metadata fetches per SW lifetime
 const _dedupedGalleries = new Set(); // prevents redundant dedup scans per SW session
+const _sourceIdToGalleryId = new Map();
+
+// Translates an external source ID (e.g. nhentai gallery ID) to an internal
+// timestamp-based galleryId. Pass-through for IDs that are already internal
+// (13+ digits). Creates a stub meta entry for new galleries.
+async function resolveGalleryId(id) {
+  const sid = String(id);
+  if (sid.length >= 13) return sid;
+  if (_sourceIdToGalleryId.has(sid)) return _sourceIdToGalleryId.get(sid);
+  const db = await openDB();
+  const existing = await new Promise((resolve, reject) => {
+    const tx = db.transaction(META_STORE, 'readonly');
+    const req = tx.objectStore(META_STORE).index('sourceId').get(sid);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+  if (existing) {
+    _sourceIdToGalleryId.set(sid, existing.galleryId);
+    return existing.galleryId;
+  }
+  const newGid = String(Date.now());
+  await metaPut({ galleryId: newGid, sourceId: sid, isStub: true });
+  _sourceIdToGalleryId.set(sid, newGid);
+  return newGid;
+}
 
 // Called from within the CACHE_IMAGE handler where the SW is provably alive
 // (return true + sender callback keep the port — and therefore the SW — open).
@@ -719,7 +843,7 @@ async function ensureMetadataForGallery(galleryId, tabId) {
         const galEntry = await galleryGet(gid).catch(() => null);
         chrome.tabs.sendMessage(tabId, {
           type: 'METADATA_SAVED',
-          galleryId: gid,
+          galleryId: meta.sourceId || gid,
           title: meta.titlePretty || meta.titleEnglish || '',
           tags: meta.tags,
           numPages: meta.numPages || 0,
@@ -734,7 +858,7 @@ async function ensureMetadataForGallery(galleryId, tabId) {
   }
 }
 
-async function cacheAllPages(galleryId) {
+async function cacheAllPages(galleryId, overwrite = false) {
   const gid = String(galleryId);
   if (cachingInProgress.has(gid)) return;
   cachingInProgress.add(gid);
@@ -747,7 +871,7 @@ async function cacheAllPages(galleryId) {
       sendErr(`Download not supported for ${SITES[source]?.name || source || 'unknown source'}.`);
       return;
     }
-    await downloadGallery(gid, source);
+    await downloadGallery(gid, source, overwrite);
   } catch (e) {
     sendErr(e.message);
   } finally {
@@ -764,10 +888,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'GET_IMAGES_BATCH') {
     (async () => {
-      const galleryId = String(msg.galleryId || '');
-      const queries   = msg.queries || []; // [{ url, pageNum }]
-      const results   = {};
-      if (!galleryId || !queries.length) { sendResponse({ results }); return; }
+      const queries = msg.queries || []; // [{ url, pageNum }]
+      const results = {};
+      if (!msg.galleryId || !queries.length) { sendResponse({ results }); return; }
+      const galleryId = await resolveGalleryId(msg.galleryId);
 
       const db = await openDB();
 
@@ -813,48 +937,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // CACHE_IMAGE uses return true + the sender has a callback, so both ends
     // of the port stay open until sendResponse is called.
     (async () => {
-      await fetchAndCache(msg.url, msg.mediaId, msg.galleryId, sender.tab?.id);
-      if (msg.galleryId) await ensureMetadataForGallery(msg.galleryId, sender.tab?.id);
+      const resolvedGid = msg.galleryId ? await resolveGalleryId(msg.galleryId) : null;
+      await fetchAndCache(msg.url, msg.mediaId, resolvedGid, sender.tab?.id);
+      if (resolvedGid) await ensureMetadataForGallery(resolvedGid, sender.tab?.id);
       sendResponse({ ok: true });
     })().catch(() => sendResponse({ ok: false }));
     return true;
-  }
-  if (msg.type === 'FETCH_METADATA') {
-    // Saves a page-extracted stub (title, numPages from DOM) as a fallback for
-    // when ensureMetadata's API call fails (e.g. no API key, network error).
-    sendResponse({ ok: true });
-    const gid = msg.galleryId;
-    const pageMeta = msg.pageMeta || null;
-    if (pageMeta) {
-      (async () => {
-        const existing = await metaGet(gid).catch(() => null);
-        if (!existing || existing.isStub) {
-          await metaPut({
-            galleryId: String(gid),
-            mediaId: String(gid),
-            titleEnglish: pageMeta.title || '',
-            titleJapanese: '',
-            titlePretty: pageMeta.title || '',
-            tags: [],
-            numPages: pageMeta.numPages || 0,
-            numFavorites: 0,
-            uploadDate: Math.floor(Date.now() / 1000),
-            pageExts: [],
-            fetchedAt: Date.now(),
-            isLocalImport: false,
-            isStub: true
-          }).catch(console.error);
-        }
-      })().catch(console.error);
-    }
-    return false;
   }
   if (msg.type === 'GET_METADATA') {
     metaGet(msg.galleryId).then(sendResponse).catch(() => sendResponse(null));
     return true;
   }
   if (msg.type === 'CACHE_ALL_PAGES') {
-    cacheAllPages(msg.galleryId).catch(console.error);
+    cacheAllPages(msg.galleryId, !!msg.overwrite).catch(console.error);
     sendResponse({ ok: true, started: true });
     return false;
   }
@@ -869,24 +964,46 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'SET_SOURCE') {
     (async () => {
-      const oldGid = String(msg.galleryId);
-      const newGid = msg.newGalleryId ? String(msg.newGalleryId) : oldGid;
+      const gid      = String(msg.galleryId);
+      const sourceId = msg.sourceId ? String(msg.sourceId) : null;
 
-      if (newGid !== oldGid) await rekeyGallery(oldGid, newGid);
-
-      const meta = await metaGet(newGid);
+      const meta = await metaGet(gid);
       if (!meta) { sendResponse({ ok: false }); return; }
-      await metaPut({ ...meta, source: msg.source });
 
-      // Fetch metadata before responding so the card refresh sees complete data.
+      const updatedMeta = { ...meta, source: msg.source };
+      if (sourceId) updatedMeta.sourceId = sourceId;
+      await metaPut(updatedMeta);
+
+      sendResponse({ ok: true, newGalleryId: gid });
+
       if (msg.source) {
         const { apiKey } = await new Promise(r => chrome.storage.local.get(['apiKey'], r));
-        await fetchMetadataForGallery(newGid, msg.source, apiKey).catch(console.error);
+        const fetchedMeta = await fetchMetadataForGallery(gid, msg.source, apiKey, sourceId).catch(() => null);
+        if (fetchedMeta) {
+          chrome.runtime.sendMessage({
+            type:     'META_READY',
+            galleryId: gid,
+            sourceId:  fetchedMeta.sourceId || null,
+            title:    fetchedMeta.titlePretty || fetchedMeta.titleEnglish || '',
+            tags:     fetchedMeta.tags,
+            numPages: fetchedMeta.numPages,
+            mediaId:  fetchedMeta.mediaId,
+          }).catch(() => {});
+        }
       }
-
-      sendResponse({ ok: true, newGalleryId: newGid });
     })().catch(() => sendResponse({ ok: false }));
     return true;
+  }
+  if (msg.type === 'GET_COVER') {
+    sendResponse({ ok: true });
+    (async () => {
+      const { apiKey } = await new Promise(r => chrome.storage.local.get(['apiKey'], r));
+      const dataUrl = await getCover(msg.galleryId, msg.source, apiKey);
+      if (dataUrl) {
+        chrome.runtime.sendMessage({ type: 'COVER_READY', galleryId: String(msg.galleryId), cover: dataUrl }).catch(() => {});
+      }
+    })().catch(console.error);
+    return false;
   }
   if (msg.type === 'GET_STATS') {
     getStats().then(sendResponse).catch(() => sendResponse({ totalImages: 0, totalSize: 0, galleries: {} }));
@@ -897,11 +1014,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'GET_GALLERY_PAGES') {
-    getGalleryPages(msg.galleryId).then(sendResponse).catch(() => sendResponse({ pages: [] }));
+    resolveGalleryId(msg.galleryId).then(gid => getGalleryPages(gid)).then(sendResponse).catch(() => sendResponse({ pages: [] }));
     return true;
   }
   if (msg.type === 'GET_PAGES_WINDOW') {
-    getGalleryPageRange(msg.galleryId, msg.startPage, msg.endPage)
+    resolveGalleryId(msg.galleryId).then(gid => getGalleryPageRange(gid, msg.startPage, msg.endPage))
       .then(sendResponse).catch(() => sendResponse({ pages: [] }));
     return true;
   }
@@ -994,6 +1111,18 @@ async function getAllGalleries() {
   }
 
   const stats = await getStats();
+
+  // Delete stubs that have no cached pages — these are orphaned from brief gallery
+  // visits where the user left before any images were cached.
+  const pagelessStubs = allMeta.filter(m => m.isStub && !(stats.galleries[m.galleryId]?.count > 0));
+  if (pagelessStubs.length > 0) {
+    await Promise.all(pagelessStubs.map(m =>
+      metaDelete(m.galleryId).then(() => galleryDelete(m.galleryId)).catch(() => {})
+    ));
+    // Remove them from allMeta so they don't appear in the response.
+    const purged = new Set(pagelessStubs.map(m => m.galleryId));
+    allMeta.splice(0, allMeta.length, ...allMeta.filter(m => !purged.has(m.galleryId)));
+  }
   const metaMap = {};
   for (const m of allMeta) metaMap[m.galleryId] = m;
 
@@ -1011,7 +1140,9 @@ async function getAllGalleries() {
           mediaId: m.mediaId,
           pageExts: m.pageExts,
           isLocalImport: m.isLocalImport || false,
-          source: m.source ?? ''
+          source: m.source ?? '',
+          sourceId: m.sourceId || null,
+          fetchedAt: m.fetchedAt
         } : {})
       };
     });

@@ -27,16 +27,11 @@ Write-Host "manifest.json  →  v$Version" -ForegroundColor Cyan
 $zip = "shiori-v$Version.zip"
 if (Test-Path $zip) { Remove-Item $zip }
 $include = @(
-    'manifest.json','background.js','content.js',
-    'library.html','library.js',
-    'reader.html','reader.js',
-    'options.html','options.js','options.css',
-    'popup.html','popup.js',
-    'CHANGELOG.md'
+    'manifest.json','background.js','content.js','CHANGELOG.md'
 )
 $paths = $include | Where-Object { Test-Path $_ }
 Compress-Archive -Path $paths -DestinationPath $zip
-Compress-Archive -Path 'icons','assets' -Update -DestinationPath $zip
+Compress-Archive -Path 'icons','assets','pages','vendor' -Update -DestinationPath $zip
 Write-Host "$zip built" -ForegroundColor Cyan
 
 # Commit, tag, push.
@@ -45,5 +40,15 @@ git commit -m "chore: release v$Version"
 git tag "v$Version"
 git push origin main
 git push origin "v$Version"
+
+# Extract changelog notes for this version (text between this heading and the next).
+$notes = [regex]::Match(
+    $changelog,
+    "(?<=## v$([regex]::Escape($Version))[^\n]*\n)[\s\S]*?(?=\n## |\z)"
+).Value.Trim()
+
+gh release create "v$Version" $zip `
+    --title "v$Version" `
+    --notes $notes
 
 Write-Host "Released v$Version" -ForegroundColor Green

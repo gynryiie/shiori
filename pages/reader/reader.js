@@ -36,7 +36,7 @@ let _stripGen  = 0; // bumped on every buildStrip call to cancel stale loads
 
 function _openReaderDb() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open('nhentai-image-cache', 6);
+    const req = indexedDB.open('nhentai-image-cache', 7);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
       for (const name of Array.from(db.objectStoreNames)) db.deleteObjectStore(name);

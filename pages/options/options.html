@@ -9,7 +9,7 @@
 
 <header>
   <div class="header-left">
-    <a class="brand-wrap" href="library.html">
+    <a class="brand-wrap" href="../library/library.html">
       <div class="brand-icon">💾</div>
       <span class="brand-text">Shiori</span>
     </a>
@@ -70,6 +70,43 @@
   </div>
 
 
+  <!-- Library Backup -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Library Backup</div>
+    </div>
+    <div class="section-body">
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">Export Backup</div>
+          <div class="toggle-desc">Save all gallery metadata as a <code>.shi</code> file. Images are not included — only metadata, tags, and source links.</div>
+        </div>
+        <button class="btn-save" id="exportBackupBtn">Backup</button>
+      </div>
+      <div class="status-msg hidden" id="backupStatus"></div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">Stats</div>
+    </div>
+    <div class="section-body">
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-name">Total Disk Writes</div>
+          <div class="toggle-desc">Total image data ever written to IndexedDB across all sessions. Counts CDN downloads and local CBZ imports.</div>
+        </div>
+        <span class="writes-count" id="totalWritesCount">—</span>
+      </div>
+      <div class="actions-row">
+        <div class="status-msg hidden" id="writesStatus"></div>
+        <button class="btn-clear-key" id="resetWritesBtn">Reset</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Danger Zone -->
   <div class="section">
     <div class="section-header">
@@ -104,6 +141,7 @@
   </div>
 </div>
 
+<script src="../../vendor/marked.min.js"></script>
 <script src="options.js"></script>
 </body>
 </html>

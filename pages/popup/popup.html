@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shiori</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="header">
+    <div class="logo" id="logoBtn" style="cursor:pointer;">
+      <div class="logo-icon">💾</div>
+      <div>
+        <div class="logo-text">Shiori</div>
+      </div>
+    </div>
+    <div class="toggle-wrap">
+      <span class="toggle-label">Active</span>
+      <label class="toggle">
+        <input type="checkbox" id="enableToggle" checked>
+        <span class="slider"></span>
+      </label>
+      <button class="settings-btn" id="refreshBtn" data-tip="Refresh"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+      <button class="settings-btn" id="uploadCbzBtn" data-tip="Import CBZ"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg></button>
+      <button class="settings-btn" id="settingsBtn" data-tip="Settings"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card"><div class="stat-value" id="totalImages">—</div><div class="stat-label">Images</div></div>
+    <div class="stat-card"><div class="stat-value" id="totalGalleries">—</div><div class="stat-label">Galleries</div></div>
+    <div class="stat-card"><div class="stat-value" id="totalSize">—</div><div class="stat-label">Stored</div></div>
+  </div>
+
+  <div class="section-row">
+    <span class="section-title">Recent Galleries</span>
+    <button class="view-all-btn" id="viewAllBtn">View All →</button>
+  </div>
+
+  <div class="gallery-list" id="galleryList">
+    <div class="empty-state">Loading cache…</div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-ghost" id="locationBtn"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg> Location</button>
+  </div>
+
+  <div class="location-panel" id="locationPanel">
+    <div class="location-label">IndexedDB Storage Path</div>
+    <div class="location-note">Paste into Explorer's address bar to open the folder. The data is stored as a LevelDB database, not individual image files.</div>
+    <div class="location-path" id="locationPath"></div>
+    <button class="copy-path-btn" id="copyPathBtn">Copy Path</button>
+  </div>
+
+  <div class="status-bar" id="statusBar">Ready</div>
+  <div id="tip"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

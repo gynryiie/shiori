@@ -420,34 +420,3 @@ if (document.body) {
   document.addEventListener('DOMContentLoaded', initObserver, { once: true });
 }
 
-function extractPageMeta() {
-  // Title: strip " - nhentai" / "| nhentai" site suffix from the page title
-  let title = document.title.replace(/\s*[|–—\-]\s*(nhentai\.net|nhentai)\s*$/i, '').trim();
-
-  // Try common nhentai gallery heading selectors for a more accurate title
-  const titleEl = document.querySelector('#info h1, .gallery-info h1, h1.title, article h1');
-  if (titleEl && titleEl.textContent.trim()) title = titleEl.textContent.trim();
-
-  // Count page thumbnails visible on the gallery index page
-  const numPages = document.querySelectorAll('.gallerythumb, .gallery-thumbnail, .thumb').length;
-
-  return { title, numPages };
-}
-
-if (window.self === window.top) {
-  // FETCH_METADATA requires DOM content — send after DOMContentLoaded.
-  const sendMeta = () => {
-    const _gid = getGalleryId();
-    if (_gid) {
-      chrome.runtime.sendMessage(
-        { type: 'FETCH_METADATA', galleryId: _gid, pageMeta: extractPageMeta() },
-        () => { chrome.runtime.lastError; }
-      );
-    }
-  };
-  if (document.readyState !== 'loading') {
-    sendMeta();
-  } else {
-    document.addEventListener('DOMContentLoaded', sendMeta, { once: true });
-  }
-}

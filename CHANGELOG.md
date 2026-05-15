@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.3.0 — 2026-05-15
+
+### Added
+- **Total disk writes** — new Stats section in Settings shows the total image data ever written to storage across all sessions, with a Reset button
+- **Shift animations on all card buttons** — every button now animates its icon when Shift is held, giving a clear visual signal before clicking the alternate action; the export button flips to a document icon, the download button flips to upload, the delete button pulses
+- **Upload button shown by default on non-downloadable galleries** — galleries that can only be imported (no supported download source) now show the upload/replace button directly without needing to hold Shift
+
+### Changed
+- **Progress bar moved above tags** in the expanded card hover; tags and page count remain visible while a download is in progress instead of being hidden
+- **Database rebuilt with new ID scheme (v7)** — gallery IDs are now internal timestamps used as both the unique key and sort order; all cached data is cleared on first launch of this version
+
 ## v1.2.0 — 2026-05-15
 
 ### Added
