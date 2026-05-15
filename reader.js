@@ -167,7 +167,7 @@ async function init() {
 
   if (visitUrl) {
     onlineBtn.href    = visitUrl;
-    onlineBtn.title   = `Open on ${siteName}`;
+    onlineBtn.dataset.tip = `Open on ${siteName}`;
     onlineBtn.innerHTML = `<img src="https://www.google.com/s2/favicons?domain=${meta.source}&sz=16" style="width:14px;height:14px;vertical-align:middle;pointer-events:none;" onerror="this.outerHTML='↗'">`;
     onlineBtn.style.display = '';
     tbGallery.href   = visitUrl;
@@ -188,6 +188,8 @@ async function init() {
     }
   }
 
+  if (pages.length === 0) { showEmpty(); return; }
+
   scrubber.max   = pages.length;
   scrubber.value = 1;
 
@@ -205,6 +207,7 @@ function showEmpty() {
 
 // ── Navigation ──
 async function goTo(n) {
+  if (!pages.length) return;
   n = Math.max(1, Math.min(pages.length, n));
   currentPage = n;
 
@@ -307,7 +310,7 @@ function applyScrollLayout() {
 function applyReaderPin(p) {
   readerPinned = p;
   readerPinBtn.innerHTML = p ? READER_PIN_SVG : READER_UNPIN_SVG;
-  readerPinBtn.title = p ? 'Unpin header' : 'Pin header';
+  readerPinBtn.dataset.tip = p ? 'Unpin header' : 'Pin header';
   localStorage.setItem('shiori-reader-pin', p ? '1' : '0');
   applyScrollLayout();
 }
@@ -501,6 +504,20 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '1') setMode('single');
   if (e.key === '2') setMode('double');
   if (e.key === '3') setMode('strip');
+});
+
+const _tip = document.getElementById('tip');
+document.addEventListener('mousemove', e => {
+  const el = e.target.closest('[data-tip]');
+  if (el) {
+    _tip.textContent = el.dataset.tip;
+    _tip.style.display = 'block';
+    const _tipW = _tip.offsetWidth;
+    _tip.style.left = Math.min(e.clientX + 14, window.innerWidth - _tipW - 10) + 'px';
+    _tip.style.top  = (e.clientY + 16) + 'px';
+  } else {
+    _tip.style.display = 'none';
+  }
 });
 
 init();

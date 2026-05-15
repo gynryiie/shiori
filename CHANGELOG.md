@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.2.0 — 2026-05-15
+
+### Added
+- **Replace images**: hold Shift and hover the download button — it flips to upload mode; Shift+click picks a CBZ and replaces the cached images for that gallery without touching any metadata
+- **Quick delete**: Shift+click the delete button removes a gallery instantly, skipping the confirmation prompt
+- **Edit source**: Shift+click the source button to reassign the gallery's source URL; the button animates to a chain icon when Shift is held so the action is clear
+- **Source auto-fill from clipboard**: when assigning a source URL for the first time, if the clipboard already contains a valid gallery URL it is applied automatically without a prompt
+- **Re-download complete galleries**: the download button stays visible even after a gallery is fully cached; clicking it on a complete gallery asks for confirmation before overwriting
+- **Metadata in exports**: exported CBZ files now bundle a `metadata.json` with title, tags, source, and page count — re-importing the file restores all of it automatically
+- **Metadata-only export**: Shift+click the export button to save just the metadata as a small zip, without re-packaging all the images
+- **Library backup import (.shi)**: the Upload button now accepts `.shi` files (a JSON backup of gallery metadata) to restore info for many galleries at once
+- **Typed tag search**: use `artist:"name"` or `tag:"name"` in the search bar to filter by a specific tag type; plain text continues to match ID, title, or any tag as before
+- **Tag chips append typed tokens**: clicking a tag on a card now adds `artist:"name"` or `tag:"name"` to the search bar instead of a bare name
+- **Custom tooltips**: all button tooltips across the library, reader, and popup are now a styled dark tooltip that follows the cursor; tooltips that have a Shift action show what Shift+click will do while Shift is held
+
+### Changed
+- Reader image width increased from 900 px to 1280 px in single-page, double-page, and scroll-strip modes
+- Setting or updating a source link now patches the card in-place (icon, tooltip, metadata line) instead of triggering a full library reload
+
 ## v1.1.0 — 2026-05-14
 
 ### Fixed

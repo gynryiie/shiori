@@ -73,7 +73,7 @@
     }
 
     #mainImg {
-      display: block; max-width: min(900px, 100vw); width: 100%;
+      display: block; max-width: min(1280px, 100vw); width: 100%;
       height: auto; user-select: none;
     }
 
@@ -96,7 +96,7 @@
     }
 
     .dImg {
-      display: block; max-width: 50%; height: auto;
+      display: block; width: 50%; max-width: 900px; height: auto;
       user-select: none;
     }
 
@@ -107,7 +107,7 @@
       padding-bottom: 20px;
     }
     #stripView.active { display: flex; }
-    .page-img { max-width: min(900px, 100vw); width: 100%; display: block; }
+    .page-img { max-width: min(1280px, 100vw); width: 100%; display: block; }
 
     /* ── Thumbnail strip ── */
     #thumbStrip {
@@ -237,6 +237,12 @@
     .empty-msg  { font-size: 12px; color: var(--muted); text-align: center; line-height: 1.8; }
     .empty-link { color: var(--accent); text-decoration: none; font-size: 11px; }
     .empty-link:hover { text-decoration: underline; }
+    #tip {
+      position: fixed; pointer-events: none; z-index: 9999;
+      background: #222; color: #eee; border: 1px solid #555;
+      padding: 3px 7px; border-radius: 4px; font-size: 11px;
+      white-space: nowrap; display: none;
+    }
   </style>
 </head>
 <body>
@@ -267,14 +273,14 @@
   <span id="pageCounter">— / —</span>
 
   <div class="mode-group">
-    <button class="mode-btn" id="btnPageSubToggle" title="Toggle single / double page" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3v18"/><rect width="12" height="18" x="6" y="3" rx="2"/><path d="M22 3v18"/></svg></button>
-    <button class="mode-btn active" id="btnLayoutToggle" title="Toggle scroll / page view"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h18"/><rect width="18" height="12" x="3" y="6" rx="2"/><path d="M3 22h18"/></svg></button>
+    <button class="mode-btn" id="btnPageSubToggle" data-tip="Toggle single / double page" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3v18"/><rect width="12" height="18" x="6" y="3" rx="2"/><path d="M22 3v18"/></svg></button>
+    <button class="mode-btn active" id="btnLayoutToggle" data-tip="Toggle scroll / page view"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2h18"/><rect width="18" height="12" x="3" y="6" rx="2"/><path d="M3 22h18"/></svg></button>
   </div>
 
-  <button class="tb-btn" id="thumbBtn" title="Thumbnails">⊞</button>
-  <a class="tb-btn" id="onlineBtn" href="#" target="_blank" title="Open on source site" style="display:none">↗</a>
-  <button class="tb-btn" id="keybindBtn" title="Keyboard shortcuts"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M6 9h.01"/><path d="M10 9h.01"/><path d="M14 9h.01"/><path d="M18 9h.01"/><path d="M6 13h.01"/><path d="M10 13h.01"/><path d="M14 13h.01"/><path d="M18 13h.01"/><path d="M10 17h4"/></svg></button>
-  <button class="tb-btn" id="readerPinBtn" title="Pin header"></button>
+  <button class="tb-btn" id="thumbBtn" data-tip="Thumbnails">⊞</button>
+  <a class="tb-btn" id="onlineBtn" href="#" target="_blank" data-tip="Open on source site" style="display:none">↗</a>
+  <button class="tb-btn" id="keybindBtn" data-tip="Keyboard shortcuts"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M6 9h.01"/><path d="M10 9h.01"/><path d="M14 9h.01"/><path d="M18 9h.01"/><path d="M6 13h.01"/><path d="M10 13h.01"/><path d="M14 13h.01"/><path d="M18 13h.01"/><path d="M10 17h4"/></svg></button>
+  <button class="tb-btn" id="readerPinBtn" data-tip="Pin header"></button>
 </div>
 
 <!-- Viewport -->
@@ -313,14 +319,14 @@
 
 <!-- Bottom bar -->
 <div id="bottombar">
-  <button class="bar-icon-btn" id="scrubToggle" title="Toggle scrubber">⇔</button>
+  <button class="bar-icon-btn" id="scrubToggle" data-tip="Toggle scrubber">⇔</button>
   <div id="scrubWrap">
     <input type="range" id="scrubber" min="1" value="1">
     <span id="scrubberLabel">1 / —</span>
   </div>
 </div>
 
-<button id="scrollTopBtn" title="Back to top">
+<button id="scrollTopBtn" data-tip="Back to top">
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
 </button>
 
@@ -345,6 +351,7 @@
   </div>
 </div>
 
+<div id="tip"></div>
 <script src="reader.js"></script>
 </body>
 </html>

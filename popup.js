@@ -104,7 +104,7 @@ function _renderGalleryList(data) {
           <div class="gallery-meta">${gallery.count} imgs · ${formatSize(gallery.size)}</div>
         </div>
       </a>
-      <button class="delete-btn" data-id="${gallery.id}" title="Delete">${DEL_ICON}</button>
+      <button class="delete-btn" data-id="${gallery.id}" data-tip="Delete">${DEL_ICON}</button>
     `;
     list.appendChild(item);
   }
@@ -226,6 +226,20 @@ document.getElementById('copyPathBtn').addEventListener('click', () => {
     btn.textContent = 'Copied!';
     setTimeout(() => { btn.textContent = orig; }, 1500);
   });
+});
+
+const _tip = document.getElementById('tip');
+document.addEventListener('mousemove', e => {
+  const el = e.target.closest('[data-tip]');
+  if (el) {
+    _tip.textContent = el.dataset.tip;
+    _tip.style.display = 'block';
+    const _tipW = _tip.offsetWidth;
+    _tip.style.left = Math.min(e.clientX + 14, window.innerWidth - _tipW - 10) + 'px';
+    _tip.style.top  = (e.clientY + 16) + 'px';
+  } else {
+    _tip.style.display = 'none';
+  }
 });
 
 loadStats();

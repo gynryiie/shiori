@@ -57,8 +57,8 @@ function buildCardTags(tags) {
   const artists = tags.filter(t => t.type === 'artist');
   const regular = tags.filter(t => t.type === 'tag');
   const chips = [
-    ...artists.map(t => `<span class="card-tag artist" data-original="${escHtml(t.name)}">${escHtml(t.name)}</span>`),
-    ...regular.map(t => `<span class="card-tag" data-original="${escHtml(t.name)}">${escHtml(t.name)}</span>`),
+    ...artists.map(t => `<span class="card-tag artist" data-type="artist" data-original="${escHtml(t.name)}">${escHtml(t.name)}</span>`),
+    ...regular.map(t => `<span class="card-tag" data-type="tag" data-original="${escHtml(t.name)}">${escHtml(t.name)}</span>`),
   ];
   return `<div class="card-tags">${chips.join('')}</div>`;
 }
@@ -144,21 +144,17 @@ function renderGrid(galleries) {
     const tagHtml = buildCardTags(g.tags);
 
     const canDownload  = SITES[g.source]?.canDownload === true;
-    const isComplete   = g.numPages > 0 && g.count >= g.numPages;
-    const showDl       = canDownload && !isComplete;
     const visitUrl     = siteGalleryUrl(g.source, g.id, 1);
     const siteName     = g.source ? (SITES[g.source]?.name || g.source) : '';
-    const openTitle    = visitUrl
-      ? `${siteName}: ${visitUrl}\n(shift-click to edit source)`
-      : 'Set source site';
+    const openTitle    = visitUrl ? `${siteName}: ${visitUrl}` : 'Set source site';
     const dlTitle      = g.numPages ? `Download all ${g.numPages} pages` : 'Fetch metadata & download all';
 
     const actionsHtml = `
       <div class="card-actions">
-        <button class="card-btn card-btn-dl" data-id="${g.id}" title="${dlTitle}" style="${showDl ? '' : 'display:none'}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg></button>
-        <button class="card-btn card-btn-open" data-id="${g.id}" title="${openTitle}">${g.source ? `<img src="https://www.google.com/s2/favicons?domain=${g.source}&sz=16" style="width:12px;height:12px;pointer-events:none;" onerror="this.outerHTML='<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'11\\' height=\\'11\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\'><path d=\\'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\\'/><path d=\\'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\\'/></svg>'">` : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>'}</button>
-        <button class="card-btn card-btn-export" data-id="${g.id}" title="Export gallery"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="m15 13-3 3-3-3"/></svg></button>
-        <button class="card-btn card-btn-del" data-id="${g.id}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        <button class="card-btn card-btn-dl" data-id="${g.id}" data-tip="${dlTitle}" data-tip-shift="Replace images from CBZ" style="${canDownload ? '' : 'display:none'}"><span class="dl-inner"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg></span></button>
+        <button class="card-btn card-btn-open" data-id="${g.id}" data-tip="${openTitle}"${visitUrl ? ' data-tip-shift="Edit source link"' : ''}><span class="open-inner">${g.source ? `<img src="https://www.google.com/s2/favicons?domain=${g.source}&sz=16" style="width:12px;height:12px;pointer-events:none;" onerror="this.outerHTML='<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'11\\' height=\\'11\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\'><path d=\\'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\\'/><path d=\\'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\\'/></svg>'">` : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>'}</span></button>
+        <button class="card-btn card-btn-export" data-id="${g.id}" data-tip="Export gallery"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12h11"/><path d="m17 16 4-4-4-4"/><path d="M21 6.344V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-1.344"/></svg></button>
+        <button class="card-btn card-btn-del" data-id="${g.id}" data-tip="Delete gallery" data-tip-shift="Quick delete"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
       </div>`;
 
     const bodyHtml = `
@@ -211,13 +207,14 @@ function renderGrid(galleries) {
       chrome.storage.local.remove('libraryCache');
     }));
 
-    const exportSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6"/><path d="m15 13-3 3-3-3"/></svg>';
-    card.querySelectorAll('.card-btn-export').forEach(b => b.addEventListener('click', async () => {
+    const exportSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12h11"/><path d="m17 16 4-4-4-4"/><path d="M21 6.344V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-1.344"/></svg>';
+    card.querySelectorAll('.card-btn-export').forEach(b => b.addEventListener('click', async (e) => {
       const btns = card.querySelectorAll('.card-btn-export');
       if ([...btns].some(x => x.disabled)) return;
       btns.forEach(x => { x.disabled = true; x.innerHTML = '…'; });
       try {
-        await exportGalleryZip(g.id);
+        if (e.shiftKey) await exportMetadataZip(g.id);
+        else            await exportGalleryZip(g.id);
       } catch (err) {
         alert('Export failed: ' + err.message);
       } finally {
@@ -225,26 +222,68 @@ function renderGrid(galleries) {
       }
     }));
 
-    card.querySelectorAll('.card-btn-dl').forEach(b => b.addEventListener('click', async () => {
-      const btns = card.querySelectorAll('.card-btn-dl');
-      if ([...btns].some(x => x.disabled)) return;
-      btns.forEach(x => { x.disabled = true; x.innerHTML = '…'; });
+    card.querySelectorAll('.card-btn-dl').forEach(b => {
+      b.addEventListener('mouseenter', () => {
+        _hoveredDlBtn = b;
+        if (_shiftHeld && !b.disabled) b.classList.add('upload-mode');
+      });
+      b.addEventListener('mouseleave', () => {
+        _hoveredDlBtn = null;
+        b.classList.remove('upload-mode');
+      });
+      b.addEventListener('click', async (e) => {
+        if (e.shiftKey) {
+          _hoveredDlBtn = null;
+          _operatingOnCard = card;
+          card.querySelectorAll('.card-btn-dl').forEach(x => x.classList.remove('upload-mode'));
+          const inp = document.getElementById('replaceImgInput');
+          inp.dataset.gid = g.id;
+          inp.click();
+          return;
+        }
+        const btns = card.querySelectorAll('.card-btn-dl');
+        if ([...btns].some(x => x.disabled)) return;
 
-      const progEl  = document.getElementById(`prog-${g.id}`);
-      const labelEl = document.getElementById(`proglabel-${g.id}`);
+        const alreadyComplete = g.numPages > 0 && g.count >= g.numPages;
+        if (alreadyComplete && !confirm(`Re-download all ${g.numPages} pages and overwrite the existing cache?`)) return;
 
-      if (progEl) progEl.closest('.card-body').classList.add('downloading');
-      if (labelEl) labelEl.textContent = 'Fetching metadata…';
+        btns.forEach(x => { x.disabled = true; x.innerHTML = '…'; });
 
-      await sendMsg({ type: 'CACHE_ALL_PAGES', galleryId: g.id });
-    }));
+        const progEl  = document.getElementById(`prog-${g.id}`);
+        const labelEl = document.getElementById(`proglabel-${g.id}`);
 
-    card.querySelectorAll('.card-btn-open').forEach(b => b.addEventListener('click', async (e) => {
+        if (progEl) progEl.closest('.card-body').classList.add('downloading');
+        if (labelEl) labelEl.textContent = 'Fetching metadata…';
+
+        await sendMsg({ type: 'CACHE_ALL_PAGES', galleryId: g.id, overwrite: alreadyComplete });
+      });
+    });
+
+    card.querySelectorAll('.card-btn-open').forEach(b => {
+      if (b.dataset.tipShift) {
+        b.addEventListener('mouseenter', () => {
+          _hoveredOpenBtn = b;
+          if (_shiftHeld && !_openBtnOrigHtml) { const _i = b.querySelector('.open-inner'); if (_i) { _openBtnOrigHtml = _i.innerHTML; _flipOpenTo(b, _OPEN_SHIFT_ICON); } }
+        });
+        b.addEventListener('mouseleave', () => {
+          if (_openBtnOrigHtml) { _flipOpenTo(b, _openBtnOrigHtml); _openBtnOrigHtml = ''; }
+          _hoveredOpenBtn = null;
+        });
+      }
+      b.addEventListener('click', async (e) => {
       const btn = e.currentTarget;
       const curVisitUrl = siteGalleryUrl(g.source, g.id, 1);
       if (!curVisitUrl || e.shiftKey) {
-        const prefill = curVisitUrl || (g.source ? siteGalleryUrl(g.source, g.id, 1) : '');
-        const input = prompt('Source URL or site (e.g. https://nhentai.net/g/610529/1/):', prefill);
+        let prefill = curVisitUrl || '';
+        if (!prefill) {
+          try {
+            const clip = (await navigator.clipboard.readText()).trim();
+            if (parseSiteUrl(clip).siteKey) prefill = clip;
+          } catch {}
+        }
+        // Skip the prompt if clipboard gave us a valid site URL and we're not editing.
+        const autoApply = !e.shiftKey && !curVisitUrl && prefill && parseSiteUrl(prefill).siteKey;
+        const input = autoApply ? prefill : prompt('Source URL or site (e.g. https://nhentai.net/g/610529/1/):', prefill);
         if (input === null) return;
 
         const { siteKey, galleryId: remoteId } = parseSiteUrl(input);
@@ -262,17 +301,25 @@ function renderGrid(galleries) {
         g.source = siteKey;
         if (newGalleryId) g.id = finalId;
 
-        btn.style.opacity = visitUrl ? '' : '0.4';
-        btn.title = visitUrl
-          ? `${siteName}: ${visitUrl}\n(shift-click to edit source)`
-          : 'Set source site';
-
-        // Force a full re-render so title/tags/cover from the metadata fetch appear immediately.
-        loadAll(true, true);
+        // Update source button immediately; title/tags/meta arrive via META_READY.
+        const $card = document.querySelector(`.card[data-gallery-id="${finalId}"]`);
+        if ($card) {
+          const openBtnInner = siteKey
+            ? `<img src="https://www.google.com/s2/favicons?domain=${siteKey}&sz=16" style="width:12px;height:12px;pointer-events:none;" onerror="this.outerHTML='<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'11\\' height=\\'11\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' stroke-linecap=\\'round\\' stroke-linejoin=\\'round\\'><path d=\\'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\\'/><path d=\\'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\\'/></svg>'">`
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+          $card.querySelectorAll('.card-btn-open').forEach(b => {
+            b.dataset.tip      = visitUrl ? `${siteName}: ${visitUrl}` : 'Set source site';
+            b.dataset.tipShift = visitUrl ? 'Edit source link' : '';
+            b.style.opacity    = visitUrl ? '' : '0.4';
+            const _i = b.querySelector('.open-inner');
+            if (_i) _i.innerHTML = openBtnInner; else b.innerHTML = `<span class="open-inner">${openBtnInner}</span>`;
+          });
+        }
       } else {
         window.open(curVisitUrl, '_blank');
       }
-    }));
+    });
+    });
 
     grid.appendChild(card);
   }
@@ -283,6 +330,76 @@ function renderGrid(galleries) {
 // ── Progress updates from background ──
 
 chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'COVER_READY') {
+    const gEntry = allGalleries.find(g => g.id === msg.galleryId);
+    if (gEntry) gEntry.cover = msg.cover;
+    _patchCovers([{ id: msg.galleryId, cover: msg.cover }]);
+    _openImportDB().then(db => new Promise((res, rej) => {
+      const tx  = db.transaction(_GAL_STORE, 'readonly');
+      const req = tx.objectStore(_GAL_STORE).get(msg.galleryId);
+      req.onsuccess = () => res(req.result || null);
+      req.onerror   = () => rej(req.error);
+    })).then(gal => {
+      if (!gal) return;
+      if (gEntry) { gEntry.count = gal.count; gEntry.size = gal.size; }
+      const metaLine = `${gal.count}${gEntry?.numPages ? ` / ${gEntry.numPages}` : ''} pages · ${formatSize(gal.size)}`;
+      document.querySelectorAll(`[data-gallery-id="${msg.galleryId}"] .card-meta`).forEach(el => {
+        el.textContent = metaLine;
+      });
+      updateHeaderStats();
+    }).catch(console.error);
+    return;
+  }
+  if (msg.type === 'META_READY') {
+    const cardId  = msg.oldGalleryId || msg.galleryId;
+    const gEntry  = allGalleries.find(g => g.id === cardId || g.id === msg.galleryId);
+    if (gEntry) {
+      gEntry.id = msg.galleryId;
+      if (msg.title    != null) gEntry.title    = msg.title;
+      if (msg.tags     != null) gEntry.tags     = msg.tags;
+      if (msg.numPages != null) gEntry.numPages = msg.numPages;
+      if (msg.mediaId  != null) gEntry.mediaId  = msg.mediaId;
+    }
+    const $card = document.querySelector(`.card[data-gallery-id="${cardId}"]`);
+    if ($card) {
+      $card.dataset.galleryId = msg.galleryId;
+      if (msg.oldGalleryId && msg.oldGalleryId !== msg.galleryId) {
+        $card.querySelectorAll('.card-id').forEach(el => {
+          el.textContent      = `#${msg.galleryId}`;
+          el.dataset.original = msg.galleryId;
+        });
+      }
+      const newTitle   = msg.title || '';
+      const newMeta    = `${gEntry?.count || 0}${msg.numPages ? ` / ${msg.numPages}` : ''} pages · ${formatSize(gEntry?.size || 0)}`;
+      const newTagHtml = buildCardTags(msg.tags);
+      $card.querySelectorAll('.card-body').forEach(body => {
+        const existingTitle = body.querySelector('.card-title');
+        if (newTitle) {
+          if (existingTitle) {
+            existingTitle.textContent      = newTitle;
+            existingTitle.dataset.original = newTitle;
+          } else {
+            const el = document.createElement('div');
+            el.className = 'card-title';
+            el.dataset.original = newTitle;
+            el.textContent = newTitle;
+            body.querySelector('.card-id-row')?.insertAdjacentElement('afterend', el);
+          }
+        } else if (existingTitle) {
+          existingTitle.remove();
+        }
+        const metaEl = body.querySelector('.card-meta');
+        if (metaEl) metaEl.textContent = newMeta;
+        const tagsEl = body.querySelector('.card-tags');
+        if (tagsEl) tagsEl.outerHTML = newTagHtml;
+      });
+      if (gEntry?.count === 0 && msg.mediaId && SITES[gEntry?.source]?.canDownload) {
+        sendMsg({ type: 'GET_COVER', galleryId: msg.galleryId, source: gEntry.source });
+      }
+    }
+    return;
+  }
+
   if (msg.type !== 'CACHE_PROGRESS') return;
 
   const { galleryId, done, total, skipped, status, error } = msg;
@@ -351,18 +468,39 @@ chrome.runtime.onMessage.addListener((msg) => {
 
 // ── Filters / sort ──
 
+function parseSearch(raw) {
+  const typed = [];
+  const plain = [];
+  const re = /(\w+):"([^"]+)"/g;
+  let match;
+  let rest = raw;
+  while ((match = re.exec(raw)) !== null) {
+    typed.push({ type: match[1].toLowerCase(), value: match[2].toLowerCase() });
+    rest = rest.replace(match[0], '');
+  }
+  rest.trim().split(/\s+/).filter(Boolean).forEach(t => plain.push(t.toLowerCase()));
+  return { typed, plain };
+}
+
 function applyFilters() {
-  const terms = document.getElementById('searchBox').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const sort  = document.getElementById('sortSelect').value;
+  const raw  = document.getElementById('searchBox').value.trim();
+  const sort = document.getElementById('sortSelect').value;
+  const { typed, plain } = parseSearch(raw);
 
   filtered = [...allGalleries];
-  if (terms.length) {
-    filtered = filtered.filter(g => terms.every(term => {
-      if (g.id.includes(term)) return true;
-      if (g.title && g.title.toLowerCase().includes(term)) return true;
-      if (g.tags && g.tags.some(t => t.name.toLowerCase().includes(term))) return true;
-      return false;
-    }));
+  if (typed.length || plain.length) {
+    filtered = filtered.filter(g => {
+      for (const { type, value } of typed) {
+        if (!g.tags || !g.tags.some(t => t.type === type && t.name.toLowerCase().includes(value))) return false;
+      }
+      for (const term of plain) {
+        if (g.id.includes(term)) continue;
+        if (g.title && g.title.toLowerCase().includes(term)) continue;
+        if (g.tags && g.tags.some(t => t.name.toLowerCase().includes(term))) continue;
+        return false;
+      }
+      return true;
+    });
   }
 
   filtered.sort((a, b) => {
@@ -496,6 +634,97 @@ function _patchCovers(galleries) {
   }
 }
 
+// ── Shift key tracking (for dl-button upload mode) ──
+
+let _shiftHeld         = false;
+let _hoveredDlBtn      = null;
+let _hoveredOpenBtn    = null;
+let _openBtnOrigHtml   = '';
+let _openFlipTimer     = null;
+let _hoveredShiftEl    = null;
+let _operatingOnCard   = null;
+const _dlTooltip = document.getElementById('dl-tooltip');
+function _flipOpenTo(btn, newHtml) {
+  const inner = btn.querySelector('.open-inner');
+  if (!inner) return;
+  if (_openFlipTimer) { clearTimeout(_openFlipTimer); _openFlipTimer = null; inner.style.transition = 'none'; inner.style.transform = ''; void inner.offsetHeight; }
+  inner.style.transition = 'transform 0.1s ease-in';
+  inner.style.transform  = 'scaleY(0)';
+  _openFlipTimer = setTimeout(() => {
+    _openFlipTimer      = null;
+    inner.style.transition = 'none';
+    inner.innerHTML     = newHtml;
+    void inner.offsetHeight;
+    inner.style.transition = 'transform 0.1s ease-out';
+    inner.style.transform  = '';
+  }, 100);
+}
+const _OPEN_SHIFT_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+const _DL_ICON = '<span class="dl-inner"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg></span>';
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Shift') return;
+  _shiftHeld = true;
+  if (_hoveredShiftEl && !_hoveredShiftEl.disabled) {
+    _hoveredShiftEl.dataset.tipOrig = _hoveredShiftEl.dataset.tip;
+    _hoveredShiftEl.dataset.tip = _hoveredShiftEl.dataset.tipShift;
+    _dlTooltip.textContent = _hoveredShiftEl.dataset.tipShift;
+  }
+  if (_hoveredDlBtn && !_hoveredDlBtn.disabled) _hoveredDlBtn.classList.add('upload-mode');
+  if (_hoveredOpenBtn && !_openBtnOrigHtml) { const _i = _hoveredOpenBtn.querySelector('.open-inner'); if (_i) { _openBtnOrigHtml = _i.innerHTML; _flipOpenTo(_hoveredOpenBtn, _OPEN_SHIFT_ICON); } }
+});
+document.addEventListener('keyup', e => {
+  if (e.key !== 'Shift') return;
+  _shiftHeld = false;
+  if (_hoveredShiftEl && _hoveredShiftEl.dataset.tipOrig) {
+    _hoveredShiftEl.dataset.tip = _hoveredShiftEl.dataset.tipOrig;
+    delete _hoveredShiftEl.dataset.tipOrig;
+    _dlTooltip.textContent = _hoveredShiftEl.dataset.tip;
+  }
+  if (_hoveredDlBtn) _hoveredDlBtn.classList.remove('upload-mode');
+  if (_hoveredOpenBtn && _openBtnOrigHtml) { _flipOpenTo(_hoveredOpenBtn, _openBtnOrigHtml); _openBtnOrigHtml = ''; }
+});
+window.addEventListener('focus', () => {
+  _shiftHeld = false;
+  if (_hoveredShiftEl && _hoveredShiftEl.dataset.tipOrig) {
+    _hoveredShiftEl.dataset.tip = _hoveredShiftEl.dataset.tipOrig;
+    delete _hoveredShiftEl.dataset.tipOrig;
+  }
+  if (_hoveredDlBtn) _hoveredDlBtn.classList.remove('upload-mode');
+  if (_hoveredOpenBtn && _openBtnOrigHtml) { _flipOpenTo(_hoveredOpenBtn, _openBtnOrigHtml); _openBtnOrigHtml = ''; }
+  if (_operatingOnCard) {
+    const c = _operatingOnCard;
+    _operatingOnCard = null;
+    c.style.pointerEvents = 'none';
+    void c.offsetHeight;
+    c.style.pointerEvents = '';
+  }
+});
+document.addEventListener('mousemove', e => {
+  const el = e.target.closest('[data-tip]');
+  const newShiftEl = (el && el.dataset.tipShift) ? el : null;
+  if (newShiftEl !== _hoveredShiftEl) {
+    if (_hoveredShiftEl && _hoveredShiftEl.dataset.tipOrig) {
+      _hoveredShiftEl.dataset.tip = _hoveredShiftEl.dataset.tipOrig;
+      delete _hoveredShiftEl.dataset.tipOrig;
+    }
+    _hoveredShiftEl = newShiftEl;
+    if (_hoveredShiftEl && _shiftHeld && !_hoveredShiftEl.disabled) {
+      _hoveredShiftEl.dataset.tipOrig = _hoveredShiftEl.dataset.tip;
+      _hoveredShiftEl.dataset.tip = _hoveredShiftEl.dataset.tipShift;
+    }
+  }
+  if (el) {
+    _dlTooltip.textContent = el.dataset.tip;
+    _dlTooltip.style.display = 'block';
+    const _tipW = _dlTooltip.offsetWidth;
+    _dlTooltip.style.left = Math.min(e.clientX + 14, window.innerWidth - _tipW - 10) + 'px';
+    _dlTooltip.style.top  = (e.clientY + 16) + 'px';
+  } else {
+    _dlTooltip.style.display = 'none';
+  }
+});
+
 // ── Local CBZ import (processed in-page; no large-buffer IPC to background) ──
 
 const _DB_NAME    = 'nhentai-image-cache';
@@ -593,6 +822,174 @@ function _getExistingPageNums(db, gid) {
   });
 }
 
+function _getExistingPagesWithSize(db, gid) {
+  return new Promise((resolve, reject) => {
+    const pages = new Map(); // pageNum -> { url, size }
+    const tx  = db.transaction(_STORE, 'readonly');
+    const req = tx.objectStore(_STORE).index('galleryId')
+                  .openCursor(IDBKeyRange.only(String(gid)));
+    req.onsuccess = (e) => {
+      const cur = e.target.result;
+      if (cur) {
+        const m = cur.value.url.match(/\/(\d+)\.\w+$/);
+        if (m) pages.set(parseInt(m[1]), { url: cur.value.url, size: cur.value.size || 0 });
+        cur.continue();
+      } else resolve(pages);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function _deleteByUrl(db, url) {
+  return new Promise((resolve, reject) => {
+    const tx  = db.transaction(_STORE, 'readwrite');
+    const req = tx.objectStore(_STORE).delete(url);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+async function replaceGalleryImages(gid, file) {
+  const card    = document.querySelector(`[data-gallery-id="${gid}"]`);
+  const progEl  = document.getElementById(`prog-${gid}`);
+  const fillEl  = document.getElementById(`progfill-${gid}`);
+  const labelEl = document.getElementById(`proglabel-${gid}`);
+  const dlBtns  = card ? [...card.querySelectorAll('.card-btn-dl')] : [];
+
+  const setLabel = (txt) => { if (labelEl) labelEl.textContent = txt; };
+  const setFill  = (pct) => { if (fillEl)  fillEl.style.width  = pct + '%'; };
+
+  dlBtns.forEach(b => { b.disabled = true; b.innerHTML = '…'; });
+  if (progEl) progEl.closest('.card-body')?.classList.add('downloading');
+
+  setLabel('Reading file…');
+  let buffer;
+  try { buffer = await file.arrayBuffer(); }
+  catch { setLabel('Error: could not read file.'); dlBtns.forEach(b => { b.disabled = false; b.innerHTML = _DL_ICON; b.classList.remove('upload-mode'); }); return; }
+
+  setLabel('Parsing ZIP…');
+  let entries;
+  try { entries = await _unzip(buffer); }
+  catch (err) { setLabel('Error: ' + err.message); dlBtns.forEach(b => { b.disabled = false; }); return; }
+
+  const imgs = entries
+    .filter(en => /\.(jpe?g|png|webp|gif)$/i.test(en.filename))
+    .sort((a, b) => {
+      const na = parseInt(a.filename.match(/(\d+)/)?.[1] || '0');
+      const nb = parseInt(b.filename.match(/(\d+)/)?.[1] || '0');
+      return na - nb;
+    });
+
+  if (imgs.length === 0) {
+    setLabel('Error: no images found.');
+    dlBtns.forEach(b => { b.disabled = false; b.innerHTML = _DL_ICON; b.classList.remove('upload-mode'); });
+    return;
+  }
+
+  setLabel('Opening cache DB…');
+  let db;
+  try { db = await _openImportDB(); }
+  catch { setLabel('Error: could not open DB.'); dlBtns.forEach(b => { b.disabled = false; b.innerHTML = _DL_ICON; b.classList.remove('upload-mode'); }); return; }
+
+  // Preserve all existing metadata — only enforce isLocalImport.
+  const existingMeta = await new Promise((res, rej) => {
+    const tx  = db.transaction(_META_STORE, 'readonly');
+    const req = tx.objectStore(_META_STORE).get(String(gid));
+    req.onsuccess = () => res(req.result || null);
+    req.onerror   = () => rej(req.error);
+  });
+  if (existingMeta) await _idbPut(db, _META_STORE, { ...existingMeta, isLocalImport: true });
+
+  const existingGal = await new Promise((res, rej) => {
+    const tx  = db.transaction(_GAL_STORE, 'readonly');
+    const req = tx.objectStore(_GAL_STORE).get(String(gid));
+    req.onsuccess = () => res(req.result || null);
+    req.onerror   = () => rej(req.error);
+  });
+
+  let galCount    = existingGal?.count    || 0;
+  let galSize     = existingGal?.size     || 0;
+  let galLatestAt = existingGal?.latestAt || 0;
+  let galCover    = existingGal?.cover    || null;
+  let galCoverPage = existingGal?.coverPage ?? 9999;
+
+  const existingPages = await _getExistingPagesWithSize(db, gid);
+
+  const total = imgs.length;
+  setFill(0); setLabel(`0 / ${total}`);
+
+  let done = 0;
+  for (let i = 0; i < imgs.length; i++) {
+    const en = imgs[i];
+    const m  = en.filename.match(/\.(jpe?g|png|webp|gif)$/i);
+    if (!m) continue;
+    const pageNum = i + 1;
+    const ext     = m[1].toLowerCase() === 'jpeg' ? 'jpg' : m[1].toLowerCase();
+    const mime    = ext === 'jpg' ? 'image/jpeg' : ext === 'png' ? 'image/png'
+                  : ext === 'webp' ? 'image/webp' : 'image/gif';
+    const url     = `local://${gid}/${pageNum}.${ext}`;
+    const dataUrl = `data:${mime};base64,` + _u8ToB64(en.data);
+    const size    = Math.round(dataUrl.length * 0.75);
+    const now     = Date.now();
+
+    const prev = existingPages.get(pageNum);
+    if (prev) {
+      await _deleteByUrl(db, prev.url);
+      galSize -= prev.size;
+      // count unchanged — replacing one page with one page
+    } else {
+      galCount++;
+    }
+
+    await _idbPut(db, _STORE, { url, dataUrl, galleryId: String(gid), cachedAt: now, size });
+    galSize    += size;
+    galLatestAt = Math.max(galLatestAt, now);
+    if (pageNum < galCoverPage) { galCoverPage = pageNum; galCover = dataUrl; }
+
+    done++;
+    setFill(Math.round((done / total) * 100));
+    setLabel(`${done} / ${total}`);
+  }
+
+  await _idbPut(db, _GAL_STORE, { galleryId: String(gid), count: galCount, size: galSize, latestAt: galLatestAt, cover: galCover, coverPage: galCoverPage });
+
+  const gEntry = allGalleries.find(g => g.id === gid);
+  if (gEntry) {
+    gEntry.count       = galCount;
+    gEntry.size        = galSize;
+    gEntry.isLocalImport = true;
+    if (galCover) gEntry.cover = galCover;
+  }
+
+  const numPages = gEntry?.numPages || 0;
+  const metaLine = `${galCount}${numPages ? ` / ${numPages}` : ''} pages · ${formatSize(galSize)}`;
+  document.querySelectorAll(`[data-gallery-id="${gid}"] .card-meta`).forEach(el => {
+    el.textContent = metaLine;
+  });
+  if (galCover) _patchCovers([{ id: gid, cover: galCover }]);
+  updateHeaderStats();
+
+  setLabel(`Done — ${done} pages replaced/added`);
+  if (progEl) progEl.closest('.card-body')?.classList.remove('downloading');
+
+  const gEntryFinal = allGalleries.find(g => g.id === gid);
+  const canDl = SITES[gEntryFinal?.source]?.canDownload === true;
+  dlBtns.forEach(b => {
+    b.disabled = false;
+    b.innerHTML = _DL_ICON;
+    b.classList.remove('upload-mode', 'done');
+    b.style.display = canDl ? '' : 'none';
+  });
+}
+
+document.getElementById('replaceImgInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  const gid  = e.target.dataset.gid;
+  e.target.value = '';
+  if (!file || !gid) return;
+  await replaceGalleryImages(gid, file);
+});
+
 async function _clearGalleryImages(db, gid) {
   return new Promise((resolve, reject) => {
     const tx  = db.transaction(_STORE, 'readwrite');
@@ -631,12 +1028,14 @@ async function importSingleFile(file, gid) {
     applyFilters();
   }
 
-  const progEl  = document.getElementById(`prog-${gid}`);
-  const fillEl  = document.getElementById(`progfill-${gid}`);
-  const labelEl = document.getElementById(`proglabel-${gid}`);
-  const card    = document.querySelector(`[data-gallery-id="${gid}"]`);
-  const dlBtn   = card ? card.querySelector('.card-btn-dl') : null;
+  // Use let so refs can be re-resolved if gid changes after reading embedded metadata.
+  let progEl  = document.getElementById(`prog-${gid}`);
+  let fillEl  = document.getElementById(`progfill-${gid}`);
+  let labelEl = document.getElementById(`proglabel-${gid}`);
+  let card    = document.querySelector(`[data-gallery-id="${gid}"]`);
+  let dlBtn   = card ? card.querySelector('.card-btn-dl') : null;
 
+  // Closures capture the variable binding, so re-assigning labelEl/fillEl below is picked up automatically.
   const setLabel = (txt) => { if (labelEl) labelEl.textContent = txt; };
   const setFill  = (pct) => { if (fillEl)  fillEl.style.width = pct + '%'; };
   if (progEl) progEl.closest('.card-body')?.classList.add('downloading');
@@ -651,6 +1050,37 @@ async function importSingleFile(file, gid) {
   try { entries = await _unzip(buffer); }
   catch (err) { setLabel('Error: ' + err.message); return; }
 
+  // Read embedded metadata.json written by the export function.
+  let embeddedMeta = null;
+  const metaEntry = entries.find(en => en.filename === 'metadata.json');
+  if (metaEntry) {
+    try { embeddedMeta = JSON.parse(new TextDecoder().decode(metaEntry.data)); } catch {}
+  }
+
+  // If the export included the original gallery ID, migrate the stub card to use it.
+  if (embeddedMeta?.galleryId) {
+    const realGid = String(embeddedMeta.galleryId);
+    if (realGid !== gid) {
+      const stub = allGalleries.find(g => g.id === gid);
+      if (stub) {
+        if (allGalleries.some(g => g.id === realGid)) {
+          allGalleries = allGalleries.filter(g => g.id !== gid); // discard temp stub
+        } else {
+          stub.id    = realGid;
+          stub.title = embeddedMeta.titlePretty || embeddedMeta.titleEnglish || nameNoExt;
+        }
+      }
+      gid = realGid;
+      applyFilters();
+      progEl  = document.getElementById(`prog-${gid}`);
+      fillEl  = document.getElementById(`progfill-${gid}`);
+      labelEl = document.getElementById(`proglabel-${gid}`);
+      card    = document.querySelector(`[data-gallery-id="${gid}"]`);
+      dlBtn   = card ? card.querySelector('.card-btn-dl') : null;
+      if (progEl) progEl.closest('.card-body')?.classList.add('downloading');
+    }
+  }
+
   const imgs = entries
     .filter(en => /\.(jpe?g|png|webp|gif)$/i.test(en.filename))
     .sort((a, b) => {
@@ -659,7 +1089,43 @@ async function importSingleFile(file, gid) {
       return na - nb;
     });
 
-  if (imgs.length === 0) { setLabel('Error: no images found in CBZ.'); return; }
+  // Metadata-only zip (no images) — restore metadata and ensure a gallery entry exists.
+  if (imgs.length === 0) {
+    if (!embeddedMeta) { setLabel('Error: no images found in CBZ.'); return; }
+    setLabel('Opening cache DB…');
+    let db;
+    try { db = await _openImportDB(); }
+    catch (err) { setLabel('Error: could not open DB.'); return; }
+
+    await _idbPut(db, _META_STORE, { ...embeddedMeta, galleryId: gid, fetchedAt: Date.now() });
+
+    // Preserve existing gallery stats (count/size/cover) if already cached, otherwise create a blank entry.
+    const existingGal = await new Promise((resolve, reject) => {
+      const tx  = db.transaction(_GAL_STORE, 'readonly');
+      const req = tx.objectStore(_GAL_STORE).get(gid);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror   = () => reject(req.error);
+    });
+    await _idbPut(db, _GAL_STORE, {
+      galleryId:  gid,
+      count:      existingGal?.count    || 0,
+      size:       existingGal?.size     || 0,
+      latestAt:   existingGal?.latestAt || Date.now(),
+      cover:      existingGal?.cover    || null,
+      coverPage:  existingGal?.coverPage ?? 9999,
+    });
+
+    const gEntry = allGalleries.find(g => g.id === gid);
+    if (gEntry) {
+      if (embeddedMeta.titlePretty || embeddedMeta.titleEnglish)
+        gEntry.title = embeddedMeta.titlePretty || embeddedMeta.titleEnglish;
+      if (embeddedMeta.tags)   gEntry.tags   = embeddedMeta.tags;
+      if (embeddedMeta.source) gEntry.source = embeddedMeta.source;
+    }
+    setLabel('Metadata restored.');
+    if (progEl) progEl.closest('.card-body')?.classList.remove('downloading');
+    return;
+  }
 
   const total    = imgs.length;
   const pageExts = imgs.map(en => en.filename.match(/\.(\w+)$/)?.[1]?.toLowerCase() || 'jpg');
@@ -669,7 +1135,13 @@ async function importSingleFile(file, gid) {
   try { db = await _openImportDB(); }
   catch (err) { setLabel('Error: could not open DB.'); return; }
 
-  await _idbPut(db, _META_STORE, {
+  // Prefer embedded metadata (restores title, tags, source, etc. from export).
+  await _idbPut(db, _META_STORE, embeddedMeta ? {
+    ...embeddedMeta,
+    galleryId: gid,
+    pageExts,
+    fetchedAt: Date.now(),
+  } : {
     galleryId: gid,
     titleEnglish: nameNoExt, titleJapanese: '', titlePretty: nameNoExt,
     tags: [], numPages: 0, numFavorites: 0,
@@ -735,6 +1207,15 @@ async function importSingleFile(file, gid) {
     gEntry.count = galCount;
     gEntry.size  = galSize;
     if (galCover) gEntry.cover = galCover;
+    // Also apply embedded metadata fields so intermediate state is correct
+    // during batch imports (before the final loadAll re-render).
+    if (embeddedMeta) {
+      if (embeddedMeta.titlePretty || embeddedMeta.titleEnglish)
+        gEntry.title = embeddedMeta.titlePretty || embeddedMeta.titleEnglish;
+      if (embeddedMeta.tags)     gEntry.tags     = embeddedMeta.tags;
+      if (embeddedMeta.source)   gEntry.source   = embeddedMeta.source;
+      if (embeddedMeta.numPages) gEntry.numPages  = embeddedMeta.numPages;
+    }
     const metaLine = `${galCount} pages · ${formatSize(galSize)}`;
     document.querySelectorAll(`[data-gallery-id="${gid}"] .card-meta`).forEach(el => {
       el.textContent = metaLine;
@@ -747,7 +1228,6 @@ async function importSingleFile(file, gid) {
   const imported = done - skipped;
   setLabel(skipped > 0 ? `Done — ${imported} imported, ${skipped} already cached` : `Done — ${imported}/${total} pages`);
   if (progEl) progEl.closest('.card-body')?.classList.remove('downloading');
-  chrome.runtime.sendMessage({ type: 'FETCH_METADATA', galleryId: gid });
 }
 
 document.getElementById('cbzFileInput').addEventListener('change', async (e) => {
@@ -755,12 +1235,62 @@ document.getElementById('cbzFileInput').addEventListener('change', async (e) => 
   e.target.value = '';
   if (!files.length) return;
 
+  if (files[0].name.endsWith('.shi')) {
+    await importLibraryBackup(files[0]);
+    return;
+  }
+
   const base = Date.now();
   for (let i = 0; i < files.length; i++) {
     await importSingleFile(files[i], String(base + i));
   }
-  await loadAll(true);
+  await loadAll(true, true);
 });
+
+async function importLibraryBackup(file) {
+  let entries;
+  try {
+    entries = JSON.parse(await file.text());
+  } catch {
+    alert('Invalid backup file — could not parse JSON.');
+    return;
+  }
+  if (!Array.isArray(entries) || entries.length === 0) {
+    alert('Backup file is empty or unrecognised.');
+    return;
+  }
+
+  const db = await _openImportDB();
+  for (const meta of entries) {
+    if (!meta.galleryId) continue;
+    const gid = String(meta.galleryId);
+
+    await _idbPut(db, _META_STORE, { ...meta, galleryId: gid, fetchedAt: Date.now() });
+
+    const existingGal = await new Promise((resolve, reject) => {
+      const tx  = db.transaction(_GAL_STORE, 'readonly');
+      const req = tx.objectStore(_GAL_STORE).get(gid);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror   = () => reject(req.error);
+    });
+    await _idbPut(db, _GAL_STORE, {
+      galleryId: gid,
+      count:     existingGal?.count    || 0,
+      size:      existingGal?.size     || 0,
+      latestAt:  existingGal?.latestAt || Date.now(),
+      cover:     existingGal?.cover    || null,
+      coverPage: existingGal?.coverPage ?? 9999,
+    });
+
+    if (!meta.isLocalImport && meta.mediaId && meta.source && SITES[meta.source]?.canDownload) {
+      if (!existingGal || existingGal.count === 0) {
+        sendMsg({ type: 'GET_COVER', galleryId: gid, source: meta.source });
+      }
+    }
+  }
+
+  await loadAll(true, true);
+}
 
 // ── Debug ZIP export ──
 
@@ -834,6 +1364,33 @@ function _zipCreate(files) {
   let pos = 0;
   for (const p of [...parts, ...centralDir, eocd]) { out.set(p, pos); pos += p.length; }
   return out;
+}
+
+async function exportMetadataZip(galleryId) {
+  const gid = String(galleryId);
+  const db  = await _openImportDB();
+
+  const meta = await new Promise((resolve, reject) => {
+    const tx  = db.transaction(_META_STORE, 'readonly');
+    const req = tx.objectStore(_META_STORE).get(gid);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror   = () => reject(req.error);
+  });
+
+  // Strip image-specific fields — this is a metadata-only backup.
+  const { pageExts, ...metaClean } = meta || {};
+
+  const enc      = new TextEncoder();
+  const zipBytes = _zipCreate([{ name: 'metadata.json', data: enc.encode(JSON.stringify(metaClean, null, 2)) }]);
+  const blob     = new Blob([zipBytes], { type: 'application/zip' });
+  const url      = URL.createObjectURL(blob);
+  const a        = document.createElement('a');
+  a.href         = url;
+  a.download     = `gallery-${gid}-metadata.zip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
 async function exportGalleryZip(galleryId) {
@@ -935,10 +1492,12 @@ document.getElementById('grid').addEventListener('click', (e) => {
   if (!tag) return;
   e.preventDefault();
   e.stopPropagation();
-  const name = (tag.dataset.original || tag.textContent).trim();
-  const box  = document.getElementById('searchBox');
-  const cur  = box.value.trim();
-  box.value  = cur ? `${cur} ${name}` : name;
+  const name  = (tag.dataset.original || tag.textContent).trim();
+  const type  = tag.dataset.type;
+  const token = type ? `${type}:"${name}"` : name;
+  const box   = document.getElementById('searchBox');
+  const cur   = box.value.trim();
+  box.value   = cur ? `${cur} ${token}` : token;
   currentPage = 1;
   applyFilters();
   updateClearBtn();
@@ -1001,12 +1560,12 @@ function setSafeMode(enabled) {
   const btn = document.getElementById('safeBtn');
   if (enabled) {
     btn.classList.add('active');
-    btn.title = 'Disable Safe Mode';
+    btn.dataset.tip = 'Disable Safe Mode';
     btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
     applyGibberishToGrid();
   } else {
     btn.classList.remove('active');
-    btn.title = 'Enable Safe Mode (blur content for sharing)';
+    btn.dataset.tip = 'Enable Safe Mode (blur content for sharing)';
     btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
     restoreTagsInGrid();
   }
@@ -1026,7 +1585,7 @@ const UNPIN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14
   function applyPin(p) {
     pinned = p;
     header.style.position = p ? 'sticky' : 'relative';
-    pinBtn.title = p ? 'Unpin header' : 'Pin header';
+    pinBtn.dataset.tip = p ? 'Unpin header' : 'Pin header';
     pinBtn.innerHTML = p ? PIN_SVG : UNPIN_SVG;
     localStorage.setItem('shiori-header-pin', p ? '1' : '0');
   }
